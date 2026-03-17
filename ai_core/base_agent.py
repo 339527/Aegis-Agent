@@ -3,6 +3,7 @@ import json
 import requests
 from dotenv import load_dotenv
 import re
+from ai_core.reviewer_agent import SecurityReviewer
 
 # 加载环境变量保险箱
 load_dotenv()
@@ -70,10 +71,17 @@ class BaseAgent:
             print(f"🤖 [Agent 大脑] 决定调用工具: {func_name}")
             print(f"🎯 [Agent 传参] 提取到的参数: {func_args}")
 
-            # 👇👇👇 你的代码绝对是漏了这两行！必须在 target_function 执行前进行拦截！
-            if not security_guardrail(func_args):
-                return "❌ AI Agent 引擎底层熔断：检测到恶意 Prompt 注入，拒绝执行本地工具！"
-            # 👆👆👆
+            # 👇👇👇 V1.1 核心换脑手术：双智能体协同拦截！
+            reviewer = SecurityReviewer()
+            review_report = reviewer.audit_payload(func_name, func_args)
+
+            if not review_report.get("is_safe", False):
+                # 提取 AI 审查官给出的拒绝理由，并狠狠地打在控制台和报告上！
+                reason = review_report.get('risk_analysis', '意图涉嫌违规，被系统强行熔断！')
+                print(f"🚨 [AI 审查官熔断] {reason}")
+                return f"❌ AI Agent 引擎底层熔断：AI 审查官拒绝执行！风险原因：{reason}"
+            # 👆👆👆 换脑手术结束
+
             # 动态执行真实的本地 Python 函数！
             if function_map and func_name in function_map:
                 target_function = function_map[func_name]
