@@ -71,16 +71,30 @@ class BaseAgent:
             print(f"🤖 [Agent 大脑] 决定调用工具: {func_name}")
             print(f"🎯 [Agent 传参] 提取到的参数: {func_args}")
 
-            # 👇👇👇 V1.1 核心换脑手术：双智能体协同拦截！
+            # 👇👇👇 V1.2 究极进化：双轨纵深防御体系！
+
+            # 【Tier 1 防线：正则毫秒级极速拦截 (省钱、省时)】
+            import re
+            malicious_pattern = re.compile(
+                r"['\";\\]|(?:--)|(/\*)|(\b(OR|AND|DROP|SELECT|DELETE|UPDATE|INSERT)\b)",
+                re.IGNORECASE
+            )
+            for key, value in func_args.items():
+                if isinstance(value, str) and malicious_pattern.search(value):
+                    print(f"⚡ [Tier 1 正则拦截] 扫到低级 SQL 注入特征 ({value})，极速熔断！未惊动 AI 审查官。")
+                    return "❌ 引擎熔断：Tier 1 正则护栏拦截低级注入攻击，拒绝执行！"
+
+            # 【Tier 2 防线：AI 审查官深度语义研判 (防越权、防伪装)】
+            # 只有当 Tier 1 认为没有标点符号危险时，才花钱请 AI 审查官出山
             reviewer = SecurityReviewer()
             review_report = reviewer.audit_payload(func_name, func_args)
 
             if not review_report.get("is_safe", False):
-                # 提取 AI 审查官给出的拒绝理由，并狠狠地打在控制台和报告上！
                 reason = review_report.get('risk_analysis', '意图涉嫌违规，被系统强行熔断！')
-                print(f"🚨 [AI 审查官熔断] {reason}")
-                return f"❌ AI Agent 引擎底层熔断：AI 审查官拒绝执行！风险原因：{reason}"
-            # 👆👆👆 换脑手术结束
+                print(f"🚨 [Tier 2 AI 审查官熔断] 识破高级伪装攻击：{reason}")
+                return f"❌ 引擎熔断：Tier 2 AI 审查官拒绝执行！风险原因：{reason}"
+
+            # 👆👆👆 双轨防线结束。只有连过两关，才能碰底层数据库！
 
             # 动态执行真实的本地 Python 函数！
             if function_map and func_name in function_map:
