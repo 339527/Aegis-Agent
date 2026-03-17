@@ -1,0 +1,28 @@
+# data/user_add_data.yaml
+- case_title: "正向：成功新增普通用户"
+  payload:
+    userName: "testuser_01"
+    nickName: "自动化测试人员01"
+    password: "Password123"
+    roleIds: [2] # 若依默认普通角色ID一般是2
+  expected_code: 200
+  expected_msg: "操作成功"
+  is_success: true # 用于判断是否需要执行后续的查询和删除动作
+
+- case_title: "反向：新增失败_用户名已存在"
+  payload:
+    userName: "admin" # 故意用系统中已存在的超管账号
+    nickName: "冒牌超管"
+    password: "Password123"
+  expected_code: 500
+  expected_msg: "新增用户'admin'失败，登录账号已存在"
+  is_success: false
+
+- case_title: "反向：新增失败_缺少必填项"
+  payload:
+    nickName: "无名氏"
+    password: "Password123"
+    # 故意不传 userName
+  expected_code: 500 # 若依底层校验报错
+  expected_msg: "用户账号不能为空" # 或者其他实际若依报错
+  is_success: false
