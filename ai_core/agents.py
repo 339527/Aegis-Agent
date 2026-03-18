@@ -28,6 +28,11 @@ class BaseAgent:
             payload["tool_choice"] = "auto"
         try:
             res = requests.post(self.url, headers=self.headers, json=payload, timeout=30).json()
+            # 🌟 核心改进：如果 API 报错（如 Key 错误），打印出具体原因
+            if 'choices' not in res:
+                logging.error(f"❌ AI 接口响应异常！完整报文: {res}")
+                return None
+
             return res['choices'][0]['message']
         except Exception as e:
             logging.error(f"❌ AI引擎通讯故障: {e}")

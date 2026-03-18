@@ -69,6 +69,10 @@ class TestUserLifecycle:  # 🌟 类名修改在这里
                     {"role": "user", "content": prompt}]
 
         ai_reply = auditor._call_model(messages)
+
+        # 🌟 核心改进：增加非空判定，防止 NoneType 报错
+        if not ai_reply:
+            pytest.fail("🚨 AI 审计官未返回任何有效信息，可能是 API Key 配置错误或额度耗尽。")
         audit_result = json.loads(ai_reply['content'].replace("```json", "").replace("```", "").strip())
 
         allure.attach(body=json.dumps(audit_result, indent=2, ensure_ascii=False),
