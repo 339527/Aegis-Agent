@@ -1,12 +1,21 @@
-# common/redis_util.py
+import os
 import redis
 import logging
-
+from unittest.mock import MagicMock  # 企业级挡板神器
 
 class RedisUtil:
     def __init__(self, host='localhost', port=6379, password='', db=0):
+        # 🛡️ 核心：云端环境感知与物理拦截
+        if os.getenv("RUN_ENV") == "ci":
+            logging.info("☁️ [企业级挡板] CI环境检测到：已拦截真实 Redis 连接，启用 Mock 对象")
+            self.r = MagicMock()
+            # 【高级技巧】伪造 Redis 的返回值。当代码执行 self.r.get() 时，永远返回一个假的验证码
+            self.r.get.return_value = '"12"'
+            return
+
+        # ============ 下面是本地真实的物理连接逻辑 ============
         try:
-            # 【核心知识点】：decode_responses=True 会自动把 Redis 返回的 byte 字节码解码成纯文本字符串
+            # decode_responses=True 会自动把 Redis 返回的 byte 字节码解码成纯文本字符串
             self.r = redis.Redis(
                 host=host,
                 port=port,
@@ -23,16 +32,10 @@ class RedisUtil:
 
     def get_captcha_code(self, uuid):
         """黑科技：根据 UUID 从若依缓存中窃取验证码答案"""
-
-        # 若依源码中定义的 Redis Key 前缀就是 'captcha_codes:'
         key = f"captcha_codes:{uuid}"
-
-        # 直接读取答案
         code = self.r.get(key)
 
         if code:
-            # 若依的数学算术题结果，在 Redis 里存的可能是带双引号的，比如 "12"
-            # 我们用 strip 把它剥干净，只保留纯数字或字母
             code = code.strip('"')
             return code
         else:
