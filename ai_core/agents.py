@@ -102,5 +102,8 @@ class TaskExecutor(BaseAgent):
                 print(f"🤖 [Agent] 审计通过，正调用本地物理函数: {func_name}")
                 return function_map[func_name](**func_args)
             return f"❌ 错误：工具箱未提供函数 {func_name}"
-
-        return ai_reply.get('content', "AI 未执行任何动作")
+            # 🌟 核心修复：在这里增加 ai_reply 的非空判定
+        if ai_reply:
+            return ai_reply.get('content', "AI 未执行任何动作")
+        else:
+            return "🚨 引擎停机：AI 服务响应异常（可能是 API Key 错误），无法继续决策。"
