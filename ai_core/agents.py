@@ -5,14 +5,18 @@ import logging
 import re
 from dotenv import load_dotenv
 
-load_dotenv()
+if not os.getenv("ZHIPU_API_KEY"):
+    load_dotenv()
 class BaseAgent:
     """Agent 家族的底层基座，处理网络与鉴权"""
 
     def __init__(self, model_name="glm-4-flash"):
         self.api_key = os.getenv("ZHIPU_API_KEY")
         if not self.api_key:
-            raise ValueError("🚨 致命错误：未能读取到 API Key！")
+            if os.getenv("RUN_ENV") == "ci":
+                self.api_key = "ci-mock-key-do-not-use-in-real-api"
+            else:
+                raise ValueError("🚨 致命错误：未能读取到 API Key！")
         self.url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
         self.model_name = model_name
         self.headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
