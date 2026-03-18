@@ -1,0 +1,24 @@
+version: '1.0'
+name: agent-ci
+displayName: agent-ci
+triggers:
+  trigger: auto
+  push:
+    branches:
+      include:
+        - master
+stages:
+  - name: run-agent-test
+    displayName: AgentTest
+    strategy: naturally
+    trigger: auto
+    executor: []
+    steps:
+      - step: build@python
+        name: run-python
+        displayName: RunPython
+        pythonVersion: '3.10'
+        commands:
+          - echo "🚀 Booting Agent CI..."
+          - pip install -r requirements.txt
+          - python run.py
