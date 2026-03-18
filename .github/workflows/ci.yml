@@ -1,0 +1,18 @@
+name: Agent-CI-Test
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run AI Agent Test
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }} # 关键：从环境变量拿 Key
+          RUN_ENV: ci #环境感知的开关！
+        run: python run.py

@@ -8,18 +8,6 @@ from ai_core.reviewer_agent import SecurityReviewer
 # 加载环境变量保险箱
 load_dotenv()
 
-
-def security_guardrail(payload_dict: dict) -> bool:
-    """引擎级护栏：扫描所有传入参数的 Value"""
-    malicious_pattern = re.compile(r"['\";\\]|(?:--)|(/\*)|(\b(OR|AND|DROP|SELECT|DELETE|UPDATE|INSERT)\b)",
-                                   re.IGNORECASE)
-
-    # 遍历 AI 提取出的所有参数值进行扫描
-    for key, value in payload_dict.items():
-        if isinstance(value, str) and malicious_pattern.search(value):
-            print(f"🚨 [底层引擎拦截] 发现高危注入特征 (参数 {key}: {value})，强制熔断！")
-            return False
-    return True
 class BaseAgent:
     def __init__(self, model_name="glm-4-flash"):
         """初始化引擎，把鉴权的脏活累活全包了"""
@@ -96,37 +84,29 @@ class BaseAgent:
 
             # 👆👆👆 双轨防线结束。只有连过两关，才能碰底层数据库！
 
-            # 动态执行真实的本地 Python 函数！
+            # 🌟 放行执行区：动态执行真实的本地 Python 函数！
             if function_map and func_name in function_map:
                 target_function = function_map[func_name]
-                # 用 ** 解包字典，自动把参数喂给函数
-                # 动态执行真实的本地 Python 函数！
-                if function_map and func_name in function_map:
-                    target_function = function_map[func_name]
 
-                    # 1. 执行本地代码，拿到原始的“生肉”数据
-                    tool_result = target_function(**func_args)
-                    print(f"🔄 [Agent 闭环] 已拿到物理执行结果，正在将结果喂回给大模型大脑...")
+                # 1. 执行本地代码，用 ** 解包字典把参数喂给函数，拿到原始的“生肉”数据
+                tool_result = target_function(**func_args)
+                print(f"🔄 [Agent 闭环] 已拿到物理执行结果，正在将结果喂回给大模型大脑...")
 
-                    # 2. 🌟 核心奥义：遵循大厂 API 协议，拼接上下文
-                    # 先把 AI 刚才发出的“调用指令”存入历史记录
-                    payload["messages"].append(ai_reply)
-                    # 再把我们本地真实的“执行结果”作为 tool 角色传回去
-                    payload["messages"].append({
-                        "role": "tool",
-                        "content": str(tool_result),
-                        "tool_call_id": tool_call.get("id", "call_default")  # 智谱/OpenAI 强制要求的关联 ID
-                    })
+                # 2. 核心奥义：遵循大厂 API 协议，拼接上下文
+                payload["messages"].append(ai_reply)  # 把 AI 的调用指令存入历史
+                payload["messages"].append({
+                    "role": "tool",
+                    "content": str(tool_result),
+                    "tool_call_id": tool_call.get("id", "call_default")
+                })
 
-                    # 3. 再次发起网络请求！让 AI 根据“生肉”组织最终的人类语言
-                    final_response = requests.post(self.url, headers=self.headers, json=payload).json()
+                # 3. 再次发起网络请求！让 AI 根据“生肉”组织最终的人类语言
+                final_response = requests.post(self.url, headers=self.headers, json=payload).json()
+                return final_response['choices'][0]['message']['content']
 
-                    # 返回最终带有思考总结的完美回复
-                    return final_response['choices'][0]['message']['content']
-                else:
-                    return f"❌ 错误：AI 想调用 {func_name}，但工具箱里没提供！"
             else:
                 return f"❌ 错误：AI 想调用 {func_name}，但你的工具箱里没提供这个函数！"
         else:
-            # AI 觉得不需要用工具，直接返回文本
+            # AI 觉得不需要用工具，直接返回纯文本聊天内容
             return ai_reply.get('content')
+
