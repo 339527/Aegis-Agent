@@ -3,3 +3,5 @@ allure-pytest
 requests
 python-dotenv
 redis
+PyYAML
+PyMySQL
