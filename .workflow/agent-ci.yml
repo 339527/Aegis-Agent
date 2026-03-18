@@ -24,5 +24,5 @@ stages:
           - export RUN_ENV=ci
           - python run.py
         env:
-          ZHIPU_API_KEY: ${{ creds.ZHIPU_API_KEY.password }}
+          ZHIPU_API_KEY: ${ZHIPU_API_KEY}
           RUN_ENV: ci
