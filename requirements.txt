@@ -2,3 +2,4 @@ pytest
 allure-pytest
 requests
 python-dotenv
+redis
