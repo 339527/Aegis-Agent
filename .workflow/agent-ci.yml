@@ -21,7 +21,8 @@ stages:
         commands:
           - echo "🚀 Booting Agent CI..."
           - pip install -r requirements.txt
-          - export RUN_ENV=ci
+          - export ZHIPU_API_KEY=${ZHIPU_API_KEY}
+          - python run.py
           - python run.py
         env:
           ZHIPU_API_KEY: ${ZHIPU_API_KEY}
