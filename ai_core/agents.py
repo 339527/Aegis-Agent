@@ -17,6 +17,13 @@ class BaseAgent:
                 self.api_key = "ci-mock-key-do-not-use-in-real-api"
             else:
                 raise ValueError("🚨 致命错误：未能读取到 API Key！")
+                # 🌟 这里的打印是破案的关键！
+        if self.api_key:
+            # 打印长度和前后各两位，一眼就能看出是不是空格或者长度不对
+            key_info = f"Length: {len(self.api_key)}, Head: {self.api_key[:2]}, Tail: {self.api_key[-2:]}"
+            print(f"☁️ [CI 变量探测] {key_info}")
+        else:
+            print("☁️ [CI 变量探测] ❌ 警告：环境变量 ZHIPU_API_KEY 为空！")
         self.url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
         self.model_name = model_name
         self.headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
