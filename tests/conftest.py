@@ -20,9 +20,10 @@ def session(base_url):
 
     # 🌟 V1.3.5 核心防御：完全隔断 CI 环境对 Redis 的物理依赖
     if os.getenv("RUN_ENV") == "ci":
-        uuid = "mock-uuid-ci"
-        real_code = "666"
         logging.info("☁️ [CI 模式] 直接使用伪造的验证码凭证")
+        # 🌟 在 CI 模式下，我们直接手动给 session 塞入一个假 Token，跳过真实登录接口
+        s.headers.update({"Authorization": "Bearer mock-token-ci-123456"})
+        yield s
     else:
         # 本地真实执行逻辑
         uuid = auth_api.get_captcha_uuid()

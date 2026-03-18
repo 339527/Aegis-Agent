@@ -20,17 +20,15 @@ class BaseApi:
 
     # 🌟 核心改动：增加 mock_data 参数接收业务层传来的假数据
     def request(self, method, url, mock_data=None, **kwargs):
+        # 🌟 强化逻辑：CI 模式下的“物理隔离”
         if os.getenv("RUN_ENV") == "ci":
-            logging.info(f"☁️ [HTTP挡板] 拦截到向 {url} 的请求，返回伪造数据！")
-            # 优先使用业务层传来的假数据，如果没有，提供万能兜底假数据
-            final_mock = mock_data if mock_data else {
-                "code": 200,
-                "msg": "操作成功 (Mocked by CI)",
-                "token": "mock-jwt-token-67890",
-                "uuid": "mock-uuid-12345",
-                "rows": []
-            }
-            return MockResponse(final_mock)
+            if mock_data is not None:
+                logging.info(f"☁️ [HTTP挡板] 拦截到向 {url} 的请求，返回伪造数据！")
+                return MockResponse(mock_data)
+            else:
+                # 如果没传 mock_data，在 CI 环境下直接伪造一个通用的响应，防止崩溃
+                logging.warning(f"⚠️ [CI 警告] 请求 {url} 未配置 Mock 数据，已返回默认成功响应！")
+                return MockResponse({"code": 200, "msg": "CI 默认 Mock 成功", "data": {}})
 
         full_url = f"{self.base_url}{url}"
         logging.info(f"👉 发起请求: [{method}] {full_url} Payload: {kwargs}")
