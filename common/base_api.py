@@ -4,6 +4,7 @@ import allure
 import logging
 import json
 
+
 class MockResponse:
     def __init__(self, json_data):
         self.status_code = 200

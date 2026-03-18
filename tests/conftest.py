@@ -6,9 +6,6 @@ from api.auth_api import AuthApi
 from common.redis_util import RedisUtil
 from config.env_config import Config
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s:%(lineno)d | %(message)s')
-
 
 @pytest.fixture(scope="session")
 def base_url():
