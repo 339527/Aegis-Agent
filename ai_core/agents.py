@@ -12,11 +12,6 @@ class BaseAgent:
 
     def __init__(self, model_name="glm-4-flash"):
         self.api_key = os.getenv("ZHIPU_API_KEY")
-        if not self.api_key:
-            if os.getenv("RUN_ENV") == "ci":
-                self.api_key = "ci-mock-key-do-not-use-in-real-api"
-            else:
-                raise ValueError("🚨 致命错误：未能读取到 API Key！")
                 # 🌟 这里的打印是破案的关键！
         if self.api_key:
             # 打印长度和前后各两位，一眼就能看出是不是空格或者长度不对
