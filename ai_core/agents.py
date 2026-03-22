@@ -5,6 +5,7 @@ import logging
 import re
 import asyncio
 from dotenv import load_dotenv
+from .router import ModelRouter
 
 load_dotenv()
 
@@ -17,6 +18,7 @@ class BaseAgent:
         self.url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
         self.api_key = os.getenv("ZHIPU_API_KEY")
         self.model_name = model_name
+
 
         if not self.api_key:
             logging.warning("☁️ [CI 探测] ZHIPU_API_KEY 环境变量为空！")
@@ -106,6 +108,7 @@ class AgentDispatcher:
     def __init__(self):
         self.executor = TaskExecutor()
         self.auditor = SecurityAuditor()
+        self.router = ModelRouter(daily_token_limit=50000)
 
     async def async_audit(self, prompt, f_name, f_args):
         """将同步审计包装为异步协程"""
@@ -117,6 +120,24 @@ class AgentDispatcher:
     async def process_task(self, user_prompt: str, tools_schema=None, function_map=None):
         """核心调度逻辑"""
         logging.info("🚀 [调度中心] 接收到新任务，开始指派 Executor 解析意图...")
+
+        # =====================================================================
+        # 🌟 V1.6 新增防线：在让大模型干活之前，先过“财务审批”和“智能路由”
+        # =====================================================================
+        route_decision = self.router.route_and_check(user_prompt)
+
+        # 卫语句 1：如果没钱了，直接掀桌子，根本不往下走！
+        if route_decision == "CIRCUIT_BREAK":
+            return "🚨 [系统拦截] 触发成本熔断保护，今日大模型 Token 预算已耗尽，拒绝服务！"
+
+        # 卫语句 2：如果问题太弱智（比如“你好”），直接本地回复，省下 Token！
+        elif route_decision == "LOCAL_MOCK":
+            return "🤖 [本地降级] 您好，我是 Aegis-Agent。您的请求太简单，已触发本地极速响应。"
+        # =====================================================================
+
+        # 如果路由器的结果是 "GLM-4"，说明审批通过，正式放行往下走！
+        logging.info("✅ 财务审批通过，指派 Executor 解析意图...")
+
 
         # 1. 意图解析 (同步让 Executor 干活)
         f_name, f_args = self.executor.parse_intention(user_prompt, tools_schema)
