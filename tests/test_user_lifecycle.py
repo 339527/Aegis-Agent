@@ -76,7 +76,10 @@ class TestUserLifecycle:
                      "content": "你是一个安全漏洞分析师。请用JSON返回: {\"risk_level\": \"High/Low\", \"core_vulnerability\": \"...\"}"},
                     {"role": "user", "content": prompt}]
 
-        ai_reply = auditor._call_model(messages)
+        # ✅ 修正为 V2.5 内部审计用的正确逻辑 (或者临时 mock)
+        # 因为 SecurityAuditor 现在设计为内部审计，如果测试需要直接调模型，建议改用 TaskExecutor
+        executor = TaskExecutor()
+        ai_reply = executor._call_model(messages)
 
         # 🌟 如果云端 AI 连不上，优雅跳过，不报红
         if not ai_reply and os.getenv("RUN_ENV") == "ci":

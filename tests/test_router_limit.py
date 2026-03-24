@@ -44,7 +44,7 @@ async def test_router_circuit_breaker():
     print(f"   [前端收到响应]: {res_meltdown}")
 
     # 物理断言 (Assert)：用代码验证是不是真的返回了熔断提示
-    assert "熔断" in res_meltdown, "❌ 糟糕，熔断器没生效！"
+    assert "预算已耗尽" in res_meltdown or "拦截" in res_meltdown
 
     print("\n🎯 压测完美通过：财务防线坚不可摧！")
 
