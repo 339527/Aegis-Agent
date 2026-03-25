@@ -1,10 +1,10 @@
-pytest
-pytest-asyncio==0.21.1
-allure-pytest
-requests
+pytest>=8.0.0
+pytest-asyncio>=0.23.0  # 提高最低版本，适配新版 Python
+allure-pytest>=2.13.0
+requests>=2.31.0
 python-dotenv
 redis
-zhipuai
+zhipuai>=2.0.0
 httpx
 sniffio
 PyYAML
