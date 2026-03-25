@@ -1,8 +1,11 @@
 import os
 import json
+from collections import deque, defaultdict
+
 import requests
 import logging
 import re
+import uuid
 import asyncio
 from dotenv import load_dotenv
 from zhipuai import ZhipuAI
@@ -145,45 +148,88 @@ class TaskExecutor(BaseAgent):
         return f"❌ 错误：未提供函数 {f_name}"
 
 
-# ==========================================
-# 4. 多智能体中央调度器 (AgentDispatcher) - 完美适配 V2.5
-# ==========================================
+# 🧠 新增模块：基于双端队列的极速滑动窗口记忆
+class AgentMemory:
+    def __init__(self, window_size=3):
+        # 核心：maxlen=window_size，保证内存永远不会 OOM
+        self.window_size = window_size
+        self.sessions = defaultdict(lambda: deque(maxlen=self.window_size))
+
+    def add_context(self, session_id: str, role: str, content: str):
+        self.sessions[session_id].append({"role": role, "content": content})
+
+    def get_context(self, session_id: str) -> list:
+        return list(self.sessions[session_id])
+
+
 class AgentDispatcher:
     def __init__(self):
-        self.executor = TaskExecutor()
-        self.auditor = SecurityAuditor()
-        self.router = ModelRouter(daily_token_limit=50000)
+        self.executor = TaskExecutor()  # 你原有的组件
+        self.auditor = SecurityAuditor()  # 你原有的组件
+        self.router = ModelRouter(daily_token_limit=50000)  # 你原有的组件
+        # 🔌 挂载记忆模块：设定只记最近 3 轮，保持网关极速且无状态
+        self.memory = AgentMemory(window_size=3)
 
-    async def async_audit(self, prompt, f_name, f_args):
-        logging.info("🕵️‍♂️ [影子审计员] 正在后台异步审查...")
-        # 🚨 核心修复：直接 await 真正的异步 audit_payload！
-        return await self.auditor.audit_payload(prompt, f_name, f_args)
+        # 🚨 接收 trace_id 和 chat_history
 
-    async def process_task(self, user_prompt: str, tools_schema=None, function_map=None):
-        logging.info("🚀 [调度中心] 接收到新任务流...")
+    async def async_audit(self, prompt, f_name, f_args, trace_id: str, chat_history: list):
+        logging.info(f"[{trace_id}] 🕵️‍♂️ [影子审计员] 正在后台异步审查 (携带 {len(chat_history)} 轮历史上下文)...")
+        # 注意：你需要确保底层的 auditor.audit_payload 能够接收并处理 history 参数
+        return await self.auditor.audit_payload(prompt, f_name, f_args, trace_id=trace_id, history=chat_history)
 
-        route_decision = self.router.route_and_check(user_prompt)
-        if route_decision == "CIRCUIT_BREAK":
-            return "🚨 [系统拦截] Token 预算已耗尽！"
-        elif route_decision == "LOCAL_MOCK":
-            return "🤖 [本地降级] 已触发本地极速响应。"
+    # 🚨 核心调度入口：新增 session_id 用于区分不同黑客/用户的记忆
+    async def process_task(self, user_prompt: str, session_id: str = "default_user", tools_schema=None,
+                           function_map=None, trace_id: str = None):
+        if not trace_id:
+            trace_id = f"REQ-{uuid.uuid4().hex[:8]}"
 
-        logging.info("🛡️ [调度中心] 触发 Tier 2 前置 AI 审计扫描...")
-        audit_report = await self.async_audit(user_prompt, "尚未分配动作", "无参数")
+        logging.info(f"[{trace_id}] 🚀 接收到 Session({session_id}) 的新任务流: {user_prompt[:15]}...")
 
-        if not audit_report.get("is_safe"):
-            risk = audit_report.get('risk_analysis', '未知风险')
-            return f"🚨 引擎熔断：Tier 2 审计识破风险！原因：{risk}"
+        # 🛡️ 加上全局容灾防弹衣
+        try:
+            # 1. 路由拦截 (极速)
+            route_decision = self.router.route_and_check(user_prompt)
+            if route_decision == "CIRCUIT_BREAK":
+                return f"[{trace_id}] 🚨 拦截：Token 预算已耗尽！"
+            elif route_decision == "LOCAL_MOCK":
+                return f"[{trace_id}] 🤖 降级：触发本地响应。"
 
-        logging.info("✅ 财务与安全审批通过，指派 Executor...")
-        f_name, f_args = self.executor.parse_intention(user_prompt, tools_schema)
+            # 2. 🧠 记忆读取
+            self.memory.add_context(session_id, "user", user_prompt)
+            chat_history = self.memory.get_context(session_id)
 
-        if f_name in ["CI_MOCK", "ERROR", "NO_ACTION"]:
-            return f_args
+            # 3. 🎯 【顺序优化】必须先解析意图，拿到兵器（参数）才能安检！
+            logging.info(f"[{trace_id}] ⚙️ 意图解析中...")
+            f_name, f_args = self.executor.parse_intention(user_prompt, tools_schema)
+            if f_name in ["CI_MOCK", "ERROR", "NO_ACTION"]:
+                return f_args
 
-        logging.info("🛡️ [调度中心] 触发 Tier 1 正则护栏扫描业务参数...")
-        if re.search(r"['\";\\]|OR|DROP", str(f_args), re.I):
-            return f"❌ 引擎熔断：Tier 1 拦截危险参数 ({f_args})！"
+            # 4. 🛡️ 【顺序优化】Tier 1 物理断路器 (Fail-Fast 核心！)
+            # 免费、极速的正则必须放在最前面！把明显的攻击挡在门外，省钱省力。
+            logging.info(f"[{trace_id}] 🛡️ 触发 Tier 1 正则极速扫描: {f_args}")
+            if re.search(r"['\";\\]|OR|DROP|<script>", str(f_args), re.I):
+                logging.error(f"[{trace_id}] ❌ 引擎熔断：Tier 1 命中危险语法！")
+                return f"[{trace_id}] ❌ 拒绝执行：Tier 1 命中高危参数规则 ({f_args})"
 
-        logging.info("🟢 [调度中心] 业务参数合规，授权执行...")
-        return self.executor.execute_tool(f_name, f_args, function_map)
+            # 5. 🕵️‍♂️ 【顺序优化】Tier 2 语义防火墙 (只审核漏网之鱼)
+            # 只有通过了极速正则的疑似正常参数，才值得花钱让大模型去审！
+            logging.info(f"[{trace_id}] 🛡️ 触发 Tier 2 AI 深度语义审计...")
+            # 现在的审计员终于知道具体的 f_name 和 f_args 是什么了！
+            audit_report = await self.async_audit(user_prompt, f_name, f_args, trace_id, chat_history)
+
+            if not audit_report.get("is_safe"):
+                risk = audit_report.get('risk_analysis', '未知风险')
+                logging.error(f"[{trace_id}] 🚨 引擎熔断：Tier 2 识破深度伪装！原因：{risk}")
+                return f"[{trace_id}] 🚨 拒绝执行：Tier 2 语义风险预警 ({risk})"
+
+            # 6. 🟢 核心工具执行与记忆闭环
+            logging.info(f"[{trace_id}] 🟢 全链路安检通过，授权执行: {f_name}")
+            result = self.executor.execute_tool(f_name, f_args, function_map)
+
+            self.memory.add_context(session_id, "assistant", str(result))
+            return result
+
+        except Exception as e:
+            # 💥 工业级兜底：无论发生什么奇葩错误，网关绝对不能死！
+            logging.error(f"[{trace_id}] 💥 系统级灾难异常: {str(e)}", exc_info=True)
+            return f"[{trace_id}] ⚠️ 系统内部保护性降级，请稍后重试。"

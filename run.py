@@ -3,6 +3,7 @@ import pytest
 import time
 import sys
 import shutil
+from config.log_config import logger
 
 if __name__ == '__main__':
     print("🚀 启动 Agent 双轨防御系统全量巡检...")

@@ -1,5 +1,5 @@
 # 文件：api/auth_api.py
-from common.base_api import BaseApi
+from api.base_api import BaseApi
 
 class AuthApi(BaseApi):
     """若依鉴权中心 API 封装"""

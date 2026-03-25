@@ -1,5 +1,5 @@
 # 文件：api/user_api.py
-from common.base_api import BaseApi
+from api.base_api import BaseApi
 import allure
 
 class UserApi(BaseApi):

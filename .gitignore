@@ -16,3 +16,6 @@ reports/
 # 5. 虚拟环境（如果你是在项目目录下建的 venv）
 venv/
 env/
+
+#6.日志文件
+logs/
