@@ -1,12 +1,13 @@
+import time
+from config.log_config import logger
 import os
 import pytest
-import time
 import sys
 import shutil
-from config.log_config import logger
 
 if __name__ == '__main__':
-    print("🚀 启动 Agent 双轨防御系统全量巡检...")
+    # 这里的 logger.info 会触发日志文件 logs/aegis_gateway.log 的创建
+    logger.info("🚀 启动 Aegis-Agent 双轨防御系统全量巡检...")
 
     # 1. 核心动作：捕获测试结果状态码！
     # 如果测试全通过，返回 0；如果 AI 拦截到了越权/注入，返回非 0
