@@ -1,50 +1,79 @@
 import os
+import sys
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
 
+# =====================================================================
+# 🎨 核心升级：自定义 ANSI 颜色格式化引擎
+# =====================================================================
+class ColoredFormatter(logging.Formatter):
+    """强制接管终端颜色，拒绝 IDE/终端 瞎猜"""
+    # 定义终端 ANSI 颜色码
+    RESET = "\x1b[0m"
+    GREY = "\x1b[38;20m"
+    GREEN = "\x1b[32;20m"
+    BOLD_YELLOW = "\x1b[33;1m"
+    BOLD_RED = "\x1b[31;1m"
+    MAGENTA = "\x1b[35;1m"
+
+    # 日志模版 (精确到毫秒)
+    FORMAT_STR = "%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | %(message)s"
+
+    # 级别与颜色的映射字典
+    FORMATS = {
+        logging.DEBUG: GREY + FORMAT_STR + RESET,
+        logging.INFO: RESET + FORMAT_STR + RESET,
+        logging.WARNING: BOLD_YELLOW + FORMAT_STR + RESET,  # 警告黄
+        logging.ERROR: BOLD_RED + FORMAT_STR + RESET,  # 致命红
+        logging.CRITICAL: MAGENTA + FORMAT_STR + RESET
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno, self.FORMAT_STR)
+        formatter = logging.Formatter(log_fmt, datefmt='%Y-%m-%d %H:%M:%S')
+        return formatter.format(record)
+
+
 def setup_logger():
-    # 1. 自动创建日志目录（防止第一次运行报错）
+    # 确保日志目录存在
     log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
     log_file = os.path.join(log_dir, 'aegis_gateway.log')
 
-    # 2. 核心：大厂日志格式（时间 + 级别 + 线程/协程 + 咱们刚写的 TraceID 所在的 message）
-    log_format = logging.Formatter(
+    # 1. 统一控制台输出 (全量走 stdout，带 ANSI 颜色)
+    unified_console_handler = logging.StreamHandler(sys.stdout)
+    unified_console_handler.setFormatter(ColoredFormatter())
+    unified_console_handler.setLevel(logging.INFO)
+
+    # 2. 文件落盘输出 (绝对不能带颜色码，否则写进 TXT 里全是乱码)
+    plain_format = logging.Formatter(
         fmt='%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-
-    # 3. 拦截器一：控制台输出（开发调试用，有颜色最好，这里用基础的）
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(log_format)
-    console_handler.setLevel(logging.INFO)
-
-    # 4. 拦截器二：文件输出（生产环境查 Bug 救命用）
-    # TimedRotatingFileHandler: 每天午夜自动把旧日志打包备份（比如 aegis_gateway.log.2026-03-24），保留最近 30 天
     file_handler = TimedRotatingFileHandler(
         filename=log_file,
-        when='midnight',  # 每天午夜切割
-        interval=1,  # 间隔 1 天
-        backupCount=30,  # 只保留最近 30 天日志，防止把服务器硬盘撑爆
+        when='midnight',
+        interval=1,
+        backupCount=30,
         encoding='utf-8'
     )
-    file_handler.setFormatter(log_format)
+    file_handler.setFormatter(plain_format)
     file_handler.setLevel(logging.INFO)
 
-    # 5. 获取根日志记录器，清空默认 handler，挂载我们自己的
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    # 3. 根日志配置
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
 
-    # 防止重复添加 handler 导致日志打两遍
-    if not logger.handlers:
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
+    # 防止 Pytest 或多次实例化导致重复添加 handler
+    if not root_logger.handlers:
+        root_logger.addHandler(unified_console_handler)
+        root_logger.addHandler(file_handler)
 
-    return logger
+    return root_logger
 
 
-# 暴露出初始化方法
+# 暴露单例句柄
 logger = setup_logger()

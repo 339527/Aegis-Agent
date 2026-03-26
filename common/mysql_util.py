@@ -1,12 +1,12 @@
 import os
 import pymysql
-import logging
+from config.log_config import logger
 from unittest.mock import MagicMock
 
 class MysqlUtil:
     def __init__(self, host, port, user, password, db, charset="utf8mb4"):
         if os.getenv("RUN_ENV") == "ci":
-            logging.info("☁️ [企业级挡板] CI环境检测到：启用高仿数据字典")
+            logger.info("☁️ [企业级挡板] CI环境检测到：启用高仿数据字典")
             self.conn = MagicMock()
             self.cursor = MagicMock()
             return
@@ -18,9 +18,9 @@ class MysqlUtil:
                 cursorclass=pymysql.cursors.DictCursor
             )
             self.cursor = self.conn.cursor()
-            logging.info(f"🟢 MySQL 数据库直连成功")
+            logger.info(f"🟢 MySQL 数据库直连成功")
         except Exception as e:
-            logging.error(f"❌ MySQL 数据库连接失败: {e}")
+            logger.error(f"❌ MySQL 数据库连接失败: {e}")
             raise e
 
     def query_one(self, sql, args=None):

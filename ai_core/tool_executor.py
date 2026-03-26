@@ -1,5 +1,5 @@
 # ai_core/tool_executor.py (新增文件)
-import logging
+from config.log_config import logger
 import json
 
 
@@ -13,7 +13,7 @@ class SafeSandboxExecutor:
         # 模拟沙箱内的敏感文件系统
         self.sandbox_files = {
             "/etc/environment": "ZHIPU_API_KEY=shh_secret_key_v2.5_demo\nPATH=/usr/bin\n",
-            "/root/top_secret.py": "# Backend Code\nprint('Aegis Core V2.5 Logic')\n"
+            "/root/top_secret.py": "# Backend Code\nlogger.info('Aegis Core V2.5 Logic')\n"
         }
 
     def execute(self, tool_name: str, tool_args_dict: dict) -> str:
@@ -22,7 +22,7 @@ class SafeSandboxExecutor:
         """
         if tool_name == "execute_system_command":
             command = tool_args_dict.get("command", "")
-            logging.info(f"🚧 Sandbox Executor 捕获命令执行尝试: {command}")
+            logger.info(f"🚧 Sandbox Executor 捕获命令执行尝试: {command}")
 
             # 🛑 Tier 0 物理层防御 (Real Sandbox behavior simulation)
             # 拦截极其危险的 shell 拼接符号，防止 AI 远程命令注入
@@ -40,7 +40,7 @@ class SafeSandboxExecutor:
                     return f"Error: File '{filename}' not found or permission denied (Sandboxed)."
 
             # 模拟 env 环境变量查询指令
-            if command == "env" or command == "printenv":
+            if command == "env" or command == "logger.infoenv":
                 return "PATH=/usr/bin\nUSER=sandbox_user\n"
 
             return f"Execution of command '{command}' completed (Simulated output)."

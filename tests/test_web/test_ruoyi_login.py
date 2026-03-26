@@ -1,7 +1,7 @@
 # tests/test_ruoyi_login.py
 import allure
 from api.user_api import UserApi
-
+from config.log_config import logger
 @allure.epic("若依中台质量保障体系")
 @allure.feature("核心鉴权链路攻防演练")
 class TestRuoYiAuth:
@@ -22,7 +22,7 @@ class TestRuoYiAuth:
             assert current_headers["Authorization"].startswith("Bearer "), "Token 格式错误！"
 
             # 在终端打印出来秀一下
-            print(f"\n🎉 【大获全胜】当前全局请求头已被自动化框架接管: {current_headers}")
+            logger.info(f"\n🎉 【大获全胜】当前全局请求头已被自动化框架接管: {current_headers}")
 
 
     # 🟢 修改后：把 conftest.py 里的 base_url 也当做参数传进来！
@@ -46,6 +46,6 @@ class TestRuoYiAuth:
             assert actual_username == "admin", f"预期为 admin，实际是: {actual_username}"
 
             permissions = res_data.get("permissions", [])[:3]
-            print(f"\n👑 【王者归来】成功闯入若依后台！")
-            print(f"👤 当前登录账号: {actual_username}")
-            print(f"🔑 拥有最高权限集合 (节选): {permissions}")
+            logger.info(f"\n👑 【王者归来】成功闯入若依后台！")
+            logger.info(f"👤 当前登录账号: {actual_username}")
+            logger.info(f"🔑 拥有最高权限集合 (节选): {permissions}")

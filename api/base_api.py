@@ -1,7 +1,7 @@
 import os
 import requests
 import allure
-import logging
+from config.log_config import logger
 import json
 
 
@@ -24,15 +24,15 @@ class BaseApi:
         # 🌟 强化逻辑：CI 模式下的“物理隔离”
         if os.getenv("RUN_ENV") == "ci":
             if mock_data is not None:
-                logging.info(f"☁️ [HTTP挡板] 拦截到向 {url} 的请求，返回伪造数据！")
+                logger.info(f"☁️ [HTTP挡板] 拦截到向 {url} 的请求，返回伪造数据！")
                 return MockResponse(mock_data)
             else:
                 # 如果没传 mock_data，在 CI 环境下直接伪造一个通用的响应，防止崩溃
-                logging.warning(f"⚠️ [CI 警告] 请求 {url} 未配置 Mock 数据，已返回默认成功响应！")
+                logger.warning(f"⚠️ [CI 警告] 请求 {url} 未配置 Mock 数据，已返回默认成功响应！")
                 return MockResponse({"code": 200, "msg": "CI 默认 Mock 成功", "data": {}})
 
         full_url = f"{self.base_url}{url}"
-        logging.info(f"👉 发起请求: [{method}] {full_url} Payload: {kwargs}")
+        logger.info(f"👉 发起请求: [{method}] {full_url} Payload: {kwargs}")
 
         try:
             response = self.session.request(method, full_url, **kwargs)

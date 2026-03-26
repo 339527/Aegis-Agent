@@ -5,6 +5,7 @@ from api.user_api import UserApi
 from common.file_util import read_yaml
 from common.mysql_util import MysqlUtil
 from config.env_config import Config
+from config.log_config import logger
 
 # 1. 提前读取好 YAML 里的用例数据列表
 USER_CASES = read_yaml("data/user_add_data.yaml")
@@ -64,7 +65,7 @@ class TestUserLifecycle:
                 assert db_result['status'] == '0', "刚创建的用户状态应该为正常(0)！"
                 assert db_result['del_flag'] == '0', "刚创建的用户不应被标记为删除(del_flag=0)！"
 
-                print(f"\n🔐 数据库核对完美通过！真实落库数据: {db_result}")
+                logger.info(f"\n🔐 数据库核对完美通过！真实落库数据: {db_result}")
 
                 # 用完关闭数据库连接，释放资源
                 db.close()
@@ -80,7 +81,7 @@ class TestUserLifecycle:
 
                 # 提取 userId
                 target_user_id = rows[0].get("userId")
-                print(f"🔍 抓取到刚创建的新用户 ID: {target_user_id}，准备执行抹杀程序...")
+                logger.info(f"🔍 抓取到刚创建的新用户 ID: {target_user_id}，准备执行抹杀程序...")
 
                 # 4.2 调用删除接口斩草除根
                 res_del = user_api.delete_user(target_user_id)
