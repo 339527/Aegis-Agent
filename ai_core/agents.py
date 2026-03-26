@@ -4,11 +4,8 @@ import re
 import uuid
 from collections import deque, defaultdict
 import requests
-from dotenv import load_dotenv
 from zhipuai import ZhipuAI
 from config.log_config import logger
-
-load_dotenv()
 
 
 # ==========================================
