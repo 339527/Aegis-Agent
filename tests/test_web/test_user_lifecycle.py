@@ -7,11 +7,15 @@ import asyncio  # 🌟 新增：Python 异步原生库
 import pytest
 import allure
 
+from dotenv import load_dotenv
+
 # 🌟 修改：引入 V1.5 的 AgentDispatcher
 from ai_core.agents import TaskExecutor, SecurityAuditor, AgentDispatcher
 from api.user_api import UserApi
 from common.mysql_util import MysqlUtil
 from config.env_config import Config
+
+load_dotenv()
 
 @pytest.fixture(scope="class")
 def lifecycle_guard():
