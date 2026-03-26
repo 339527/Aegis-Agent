@@ -18,20 +18,12 @@ stages:
         name: run-python
         displayName: RunPython
         pythonVersion: '3.10'
-        commands:
-          - echo "🚀 Booting Agent CI..."
-          # 1. 强制升级 pip 并设置清华镜像源，彻底解决依赖下载超时问题
-          - python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-          # 2. 安装依赖，增加缓存和重试机制，确保 python-dotenv 这种关键包不丢失
-          - python -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-          # 3. 环境变量注入
-          - export RUN_ENV=ci
-          - export ZHIPU_API_KEY=${ZHIPU_API_KEY}
-
-          # 4. 运行巡检，使用 -m 模块化运行，确保解释器能正确识别 user 目录下的库
-          - python run.py
         env:
           ZHIPU_API_KEY: ${ZHIPU_API_KEY}
           RUN_ENV: ci
+        commands:
+          - echo "🚀 Booting Agent CI..."
+          - python -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+          - python -m pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+          # 🌟 核心点 2：删掉你原来的 export 语句，因为 env 区块会自动帮你 export
+          - python run.py
