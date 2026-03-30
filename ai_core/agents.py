@@ -7,6 +7,7 @@ import requests
 from dotenv import load_dotenv
 from zhipuai import ZhipuAI
 from config.log_config import logger
+from ai_core.router import ModelRouter
 
 load_dotenv()
 
@@ -108,8 +109,6 @@ class AgentMemory:
 class AgentDispatcher:
     def __init__(self, executor=None, auditor=None, router=None, memory=None, defect_manager=None):
         # 兼容性导入：防止循环依赖，且支持默认实例化
-        from ai_core.router import ModelRouter  # 确保路径正确
-
         self.executor = executor or TaskExecutor()
         self.auditor = auditor or SecurityAuditor()
         self.router = router or ModelRouter(daily_token_limit=50000)
@@ -130,8 +129,8 @@ class AgentDispatcher:
             # 🌟 关键修复：强制转为 str，防止 dict 类型导致 re.search 崩溃
             input_text = str(user_prompt)
 
-            strict_pattern = r"(ZHIPU_API_KEY|SECRET_FLAG|/ETC/ENVIRONMENT|后端代码|源码)"
-            if re.search(strict_pattern, input_text, re.I):
+            sql_os_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union|exec)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=|<script>|/bin/bash)"
+            if re.search(sql_os_pattern, input_text, re.I):
                 msg = f"🛡️ [Tier 0 拦截] 输入含系统级禁词，物理熔断。"
                 logger.error(f"[{trace_id}] ❌ 触发物理熔断！内容特征: {input_text[:30]}")
                 self.memory.add_context(session_id, "user", input_text)
