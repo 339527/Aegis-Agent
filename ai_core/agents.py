@@ -129,7 +129,7 @@ class AgentDispatcher:
             # 🌟 关键修复：强制转为 str，防止 dict 类型导致 re.search 崩溃
             input_text = str(user_prompt)
 
-            sql_os_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union|exec)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=|<script>|/bin/bash|zhipu_api_key|zhihu|密钥|密码|secret)"
+            sql_os_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=|<script>|/bin/bash|zhipu_api_key|zhihu|密钥|密码)"
             if re.search(sql_os_pattern, input_text, re.I):
                 msg = f"🛡️ [Tier 0 拦截] 输入含系统级禁词，物理熔断。"
                 logger.error(f"[{trace_id}] ❌ 触发物理熔断！内容特征: {input_text[:30]}")
