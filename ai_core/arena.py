@@ -22,6 +22,12 @@ class Arena:
 
             # 1. 红队根据上一轮的反馈调整策略 (进化)
             attack_pkg = await self.attacker.generate_attack_payload(target_objective, last_feedback)
+            
+            # 记录红队攻击载荷
+            if attack_pkg["type"] == "tool_call":
+                logger.info(f"🔴 红队攻击载荷: [{attack_pkg['content']['name']}] 参数: {attack_pkg['content']['arguments']}")
+            else:
+                logger.info(f"🔴 红队攻击载荷: [{attack_pkg['type']}] 内容: {attack_pkg['content'][:100]}...")
 
             # 2. 调用唯一的防御门户 Dispatcher (包含 Tier 0-2 和 出口审计)
             result = await self.dispatcher.process_task(
