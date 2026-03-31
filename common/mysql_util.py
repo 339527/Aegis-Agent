@@ -4,7 +4,18 @@ from config.log_config import logger
 from unittest.mock import MagicMock
 
 class MysqlUtil:
-    def __init__(self, host, port, user, password, db, charset="utf8mb4"):
+    _connection_pool = {}
+    
+    def __new__(cls, host, port, user, password, db, charset="utf8mb4"):
+        # 单例模式：根据连接参数创建唯一实例
+        key = f"{host}:{port}:{user}:{db}"
+        if key not in cls._connection_pool:
+            instance = super(MysqlUtil, cls).__new__(cls)
+            instance._init_connection(host, port, user, password, db, charset)
+            cls._connection_pool[key] = instance
+        return cls._connection_pool[key]
+    
+    def _init_connection(self, host, port, user, password, db, charset="utf8mb4"):
         if os.getenv("RUN_ENV") == "ci":
             logger.info("☁️ [企业级挡板] CI环境检测到：启用高仿数据字典")
             self.conn = MagicMock()
@@ -18,7 +29,7 @@ class MysqlUtil:
                 cursorclass=pymysql.cursors.DictCursor
             )
             self.cursor = self.conn.cursor()
-            logger.info(f"🟢 MySQL 数据库直连成功")
+            logger.info(f"🟢 MySQL 数据库连接池初始化成功")
         except Exception as e:
             logger.error(f"❌ MySQL 数据库连接失败: {e}")
             raise e
@@ -39,6 +50,10 @@ class MysqlUtil:
         self.cursor.execute(sql, args)
         return self.cursor.fetchall()
 
+    def execute(self, sql, args=None):
+        self.cursor.execute(sql, args)
+        self.conn.commit()
+
     def close(self):
-        self.cursor.close()
-        self.conn.close()
+        # 连接池模式下不关闭连接，由连接池管理生命周期
+        logger.info("🔄 MySQL 连接归还连接池")

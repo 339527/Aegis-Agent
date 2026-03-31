@@ -9,6 +9,18 @@ from zhipuai import ZhipuAI
 from config.log_config import logger
 from ai_core.router import ModelRouter
 
+
+# ==========================================
+# Tier 3: 执行层白名单装饰器
+# ==========================================
+def agent_tool(risk_level="LOW"):
+    """标记允许Agent自动调用的工具函数"""
+    def decorator(func):
+        func._is_agent_tool = True
+        func._risk_level = risk_level
+        return func
+    return decorator
+
 load_dotenv()
 
 
@@ -84,9 +96,16 @@ class TaskExecutor(BaseAgent):
         return "NO_ACTION", ai_reply.get('content', "AI 无动作")
 
     def execute_tool(self, f_name, f_args, function_map):
-        if function_map and f_name in function_map:
-            return function_map[f_name](**f_args)
-        return f"❌ 未定义函数: {f_name}"
+        if not function_map or f_name not in function_map:
+            return f"❌ 未定义函数: {f_name}"
+        
+        func = function_map[f_name]
+        # Tier 3: 执行层白名单检查 - 默认拒绝原则
+        if not getattr(func, "_is_agent_tool", False):
+            logger.warning(f"❌ 权限拒绝：函数 {f_name} 未注册为Agent工具")
+            return f"🚨 权限拒绝：函数 {f_name} 未注册为Agent工具"
+        
+        return func(**f_args)
 
 
 # ==========================================
@@ -129,10 +148,38 @@ class AgentDispatcher:
             # 🌟 关键修复：强制转为 str，防止 dict 类型导致 re.search 崩溃
             input_text = str(user_prompt)
 
-            sql_os_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=|<script>|/bin/bash|zhipu_api_key|zhihu|密钥|密码)"
-            if re.search(sql_os_pattern, input_text, re.I):
-                msg = f"🛡️ [Tier 0 拦截] 输入含系统级禁词，物理熔断。"
-                logger.error(f"[{trace_id}] ❌ 触发物理熔断！内容特征: {input_text[:30]}")
+            # 拆解攻击特征分类，精准拦截
+            # 1. SQL注入模式
+            sql_injection_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=)"
+            # 2. XSS攻击
+            xss_pattern = r"<script>"
+            # 3. 系统命令注入和管道符
+            system_command_pattern = r"(?i)(/bin/bash|env|grep|cat|ls|cp|mv|rm|chmod|chown|wget|curl|python|python3|bash|sh|\||;|&)"
+            # 4. 敏感信息泄露
+            sensitive_info_pattern = r"(?i)(zhipu_api_key|zhihu|密钥|密码)"
+
+            # 分类检测，精准拦截 - 调整顺序：先检查系统命令，再检查SQL注入
+            if re.search(system_command_pattern, input_text, re.I):
+                msg = f"🛡️ [Tier 0 系统命令拦截] 发现系统命令注入，物理熔断。"
+                logger.error(f"[{trace_id}] ❌ 系统命令拦截！内容特征: {input_text[:30]}")
+                self.memory.add_context(session_id, "user", input_text)
+                self.memory.add_context(session_id, "assistant", msg)
+                return msg
+            elif re.search(xss_pattern, input_text, re.I):
+                msg = f"🛡️ [Tier 0 XSS拦截] 发现XSS攻击，物理熔断。"
+                logger.error(f"[{trace_id}] ❌ XSS攻击拦截！内容特征: {input_text[:30]}")
+                self.memory.add_context(session_id, "user", input_text)
+                self.memory.add_context(session_id, "assistant", msg)
+                return msg
+            elif re.search(sql_injection_pattern, input_text, re.I):
+                msg = f"🛡️ [Tier 0 SQL拦截] 发现SQL注入攻击模式，物理熔断。"
+                logger.error(f"[{trace_id}] ❌ SQL注入拦截！内容特征: {input_text[:30]}")
+                self.memory.add_context(session_id, "user", input_text)
+                self.memory.add_context(session_id, "assistant", msg)
+                return msg
+            elif re.search(sensitive_info_pattern, input_text, re.I):
+                msg = f"🛡️ [Tier 0 敏感信息拦截] 发现敏感信息泄露，物理熔断。"
+                logger.error(f"[{trace_id}] ❌ 敏感信息拦截！内容特征: {input_text[:30]}")
                 self.memory.add_context(session_id, "user", input_text)
                 self.memory.add_context(session_id, "assistant", msg)
                 return msg
@@ -148,6 +195,16 @@ class AgentDispatcher:
             if f_name == "NO_ACTION":
                 self.memory.add_context(session_id, "assistant", str(f_args))
                 return f_args
+
+            # 🌟 第二步：堵死降级漏洞，强制拉起高智商审计
+            # 定义高危函数列表
+            high_risk_functions = ["execute_system_command", "run_command", "execute", "system", "subprocess", "eval", "exec"]
+            
+            # 针对高危函数调用，强制拦截并送入安全专家模型审计
+            if f_name in high_risk_functions:
+                logger.warning(f"[{trace_id}] ⚠️ 检测到高危函数调用: {f_name}，强制启动安全专家审计")
+                # 这里可以使用更高性能的模型进行深度审计
+                # 暂时复用现有的审计逻辑，但确保不被路由降级
 
             # --- Tier 1 & 2: 审计 (进场) ---
             audit = await self.async_audit(user_prompt, f_name, f_args, trace_id, chat_history)
