@@ -47,7 +47,7 @@ class SecurityAuditor:
 
     async def audit_payload(self, original_prompt, func_name, func_args, trace_id=None, history=None):
         # --- Tier 1: 参数级物理断路器 ---
-        forbidden_keywords = ["ZHIPU_API_KEY", "/etc/environment", "os.environ", "后端代码"]
+        forbidden_keywords = ["ZHIPU_API_KEY", "/etc/environment", "os.environ", "后端代码", "env", "grep", "cat", "ls", "cp", "mv", "rm", "chmod", "chown", "wget", "curl", "python", "python3", "bash", "sh", "echo", "export", "unset", "set", "source"]
         payload_to_scan = str(func_args).lower()
         for kw in forbidden_keywords:
             if kw.lower() in payload_to_scan:
@@ -120,7 +120,7 @@ class AgentDispatcher:
 
     async def process_task(self, user_prompt, session_id: str = "default_user",
                            tools_schema=None, function_map=None, trace_id: str = None,
-                           leak_keywords=None, skip_tier0: bool = False):
+                           leak_keywords=None):
         if not trace_id: trace_id = f"REQ-{uuid.uuid4().hex[:8]}"
         logger.info(f"[{trace_id}] 🚀 任务启动 | 类型: {type(user_prompt).__name__}")
 
@@ -128,16 +128,14 @@ class AgentDispatcher:
             # --- Tier 0: 前置提示词护栏 (防御补丁) ---
             # 🌟 关键修复：强制转为 str，防止 dict 类型导致 re.search 崩溃
             input_text = str(user_prompt)
-            
-            # 跳过Tier 0检查（用于演习模式测试）
-            if not skip_tier0:
-                sql_os_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union|exec|env|grep|echo|cat|ls|pwd|cd|mkdir|rm|cp|mv|chmod|chown)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=|<script>|/bin/bash|zhipu_api_key|zhihu|密钥|密码|secret)"
-                if re.search(sql_os_pattern, input_text, re.I):
-                    msg = f"🛡️ [Tier 0 拦截] 输入含系统级禁词，物理熔断。"
-                    logger.error(f"[{trace_id}] ❌ 触发物理熔断！内容特征: {input_text[:30]}")
-                    self.memory.add_context(session_id, "user", input_text)
-                    self.memory.add_context(session_id, "assistant", msg)
-                    return msg
+
+            sql_os_pattern = r"(?i)(\b(select|update|delete|insert|drop|truncate|union)\b|['\"].+?['\"]?\s*(or|and)\s*['\"]?.+?['\"]?\s*=|<script>|/bin/bash|zhipu_api_key|zhihu|密钥|密码)"
+            if re.search(sql_os_pattern, input_text, re.I):
+                msg = f"🛡️ [Tier 0 拦截] 输入含系统级禁词，物理熔断。"
+                logger.error(f"[{trace_id}] ❌ 触发物理熔断！内容特征: {input_text[:30]}")
+                self.memory.add_context(session_id, "user", input_text)
+                self.memory.add_context(session_id, "assistant", msg)
+                return msg
 
             # --- 路由与上下文 ---
             if self.router.route_and_check(user_prompt) == "CIRCUIT_BREAK": return "🚨 成本熔断"
