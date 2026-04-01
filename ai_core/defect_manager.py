@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from config.log_config import logger
 
@@ -48,7 +49,10 @@ class DefectManager:
         logger.warning(f"[{trace_id}] 📤 [缺陷管家] 提单成功 | 级别: {analysis_report['severity']} | 载荷: {json_str}")
 
         # 2. 数据血汗工厂落盘：使用追加模式写入本地 JSONL 文件 (数据库的平替)
-        with open("security_defects.jsonl", "a", encoding="utf-8") as f:
+        # 使用绝对路径，确保文件总是写入到项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        file_path = os.path.join(project_root, "security_defects.jsonl")
+        with open(file_path, "a", encoding="utf-8") as f:
             f.write(json_str + "\n")
 
         return json_str
