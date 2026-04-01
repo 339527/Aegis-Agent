@@ -1,6 +1,6 @@
 import json
-import logging
 from datetime import datetime
+from config.log_config import logger
 
 class DefectManager:
     def __init__(self, platform="ZenTao"):
@@ -25,20 +25,30 @@ class DefectManager:
         """
         [自动定级]
         """
-        if any(kw in payload.lower() for kw in ["rm ", "drop", "env"]):
+        # 确保 payload 是字符串类型
+        payload_str = str(payload).lower()
+        if any(kw in payload_str for kw in ["rm ", "drop", "env"]):
             return "CRITICAL (危)"
         return "HIGH (高)"
 
     def push_to_issue_tracker(self, analysis_report):
         """
-        [自动提单] 模拟向禅道/飞书推送 JSON
+        [自动提单与持久化] 记录溯源日志并落地 JSONL
         """
-        # 组装大厂标准的 Issue 报文
+        trace_id = analysis_report.get('trace_id', 'UNKNOWN')
         issue_json = {
-            "title": f"🚨 [Security-Leak] AI 防御失效告警 - {analysis_report['trace_id']}",
+            "title": f"🚨 [Security-Leak] AI 防御失效告警 - {trace_id}",
             "body": analysis_report,
             "assignee": "Security-Dev-Team"
         }
-        # 实际开发中这里会是 requests.post(webhook_url, json=issue_json)
-        logging.warning(f"📤 [缺陷管家] 自动提单成功！已同步至 {self.platform} 看板")
-        return json.dumps(issue_json, ensure_ascii=False, indent=2)
+
+        json_str = json.dumps(issue_json, ensure_ascii=False)
+
+        # 1. 消除幽灵日志：将 trace_id 和核心 payload 强制注入日志流
+        logger.warning(f"[{trace_id}] 📤 [缺陷管家] 提单成功 | 级别: {analysis_report['severity']} | 载荷: {json_str}")
+
+        # 2. 数据血汗工厂落盘：使用追加模式写入本地 JSONL 文件 (数据库的平替)
+        with open("security_defects.jsonl", "a", encoding="utf-8") as f:
+            f.write(json_str + "\n")
+
+        return json_str

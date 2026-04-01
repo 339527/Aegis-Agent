@@ -95,7 +95,7 @@ class TaskExecutor(BaseAgent):
                 return "ERROR", "🚨 JSON解析失败"
         return "NO_ACTION", ai_reply.get('content', "AI 无动作")
 
-    def execute_tool(self, f_name, f_args, function_map):
+    async def execute_tool(self, f_name, f_args, function_map):
         if not function_map or f_name not in function_map:
             return f"❌ 未定义函数: {f_name}"
         
@@ -105,7 +105,12 @@ class TaskExecutor(BaseAgent):
             logger.warning(f"❌ 权限拒绝：函数 {f_name} 未注册为Agent工具")
             return f"🚨 权限拒绝：函数 {f_name} 未注册为Agent工具"
         
-        return func(**f_args)
+        # 检查是否为异步函数
+        import inspect
+        if inspect.iscoroutinefunction(func):
+            return await func(**f_args)
+        else:
+            return func(**f_args)
 
 
 # ==========================================
@@ -216,7 +221,7 @@ class AgentDispatcher:
                 return block_msg
 
             # --- 核心执行与出口审计 (Egress Audit) ---
-            raw_result = self.executor.execute_tool(f_name, f_args, function_map)
+            raw_result = await self.executor.execute_tool(f_name, f_args, function_map)
             result_str = str(raw_result)
 
             # 🚨 终极防线：出口回显审计
