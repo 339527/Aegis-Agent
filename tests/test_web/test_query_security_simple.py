@@ -191,3 +191,23 @@ class TestQuerySecuritySimple:
         # 验证出口检查能够发现并拦截敏感信息泄露
         assert any(keyword in str(result) for keyword in ["物理击穿", "发现敏感数据"])
 
+    @allure.story("混合攻击检测测试")
+    def test_mixed_attack_detection(self):
+        """测试包含多种攻击方式的混合攻击能否被正确识别和拦截"""
+        
+        # 创建包含多种攻击方式的字典请求
+        mixed_attack_dict = {
+            "user_id": "100' OR '1'='1",  # SQL注入
+            "command": "env | grep -i zhipu",  # 系统命令注入
+            "message": "<script>alert('xss')</script>",  # XSS攻击
+            "api_key": "ZHIPU_API_KEY_VALUE"  # 敏感信息
+        }
+        
+        result = asyncio.run(self.dispatcher.process_task(mixed_attack_dict))
+        
+        # 验证系统能够识别并拦截混合攻击
+        # 当前系统使用elif逻辑，只会拦截第一个匹配的攻击类型
+        # 系统命令注入的优先级最高，应该先被拦截
+        assert any(keyword in str(result) for keyword in ["熔断", "拦截", "拒绝", "命中"])
+        assert "系统命令拦截" in str(result)
+
