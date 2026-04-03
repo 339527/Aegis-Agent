@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from ai_core.trace_context import get_trace_id
 
 
 # =====================================================================
@@ -30,6 +31,11 @@ class ColoredFormatter(logging.Formatter):
     }
 
     def format(self, record):
+        # 获取当前上下文的trace_id
+        trace_id = get_trace_id()
+        # 在日志消息前添加trace_id
+        if hasattr(record, 'msg') and isinstance(record.msg, str):
+            record.msg = f"[{trace_id}] {record.msg}"
         log_fmt = self.FORMATS.get(record.levelno, self.FORMAT_STR)
         formatter = logging.Formatter(log_fmt, datefmt='%Y-%m-%d %H:%M:%S')
         return formatter.format(record)
@@ -49,7 +55,16 @@ def setup_logger():
     unified_console_handler.setLevel(logging.INFO)
 
     # 2. 文件落盘输出 (绝对不能带颜色码，否则写进 TXT 里全是乱码)
-    plain_format = logging.Formatter(
+    class PlainFormatter(logging.Formatter):
+        def format(self, record):
+            # 获取当前上下文的trace_id
+            trace_id = get_trace_id()
+            # 在日志消息前添加trace_id
+            if hasattr(record, 'msg') and isinstance(record.msg, str):
+                record.msg = f"[{trace_id}] {record.msg}"
+            return super().format(record)
+    
+    plain_format = PlainFormatter(
         fmt='%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )

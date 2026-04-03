@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 from config.log_config import logger
+from ai_core.trace_context import get_trace_id
 
 class DefectManager:
     def __init__(self, platform="ZenTao"):
@@ -45,8 +46,8 @@ class DefectManager:
 
         json_str = json.dumps(issue_json, ensure_ascii=False)
 
-        # 1. 消除幽灵日志：将 trace_id 和核心 payload 强制注入日志流
-        logger.warning(f"[{trace_id}] 📤 [缺陷管家] 提单成功 | 级别: {analysis_report['severity']} | 载荷: {json_str}")
+        # 1. 消除幽灵日志：将核心 payload 强制注入日志流
+        logger.warning(f"📤 [缺陷管家] 提单成功 | 级别: {analysis_report['severity']} | 载荷: {json_str}")
 
         # 2. 数据血汗工厂落盘：使用追加模式写入本地 JSONL 文件 (数据库的平替)
         # 使用绝对路径，确保文件总是写入到项目根目录

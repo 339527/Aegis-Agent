@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from zhipuai import ZhipuAI
 from config.log_config import logger
 from ai_core.router import ModelRouter
+from ai_core.trace_context import set_trace_id, get_trace_id
 
 
 # ==========================================
@@ -145,8 +146,12 @@ class AgentDispatcher:
     async def process_task(self, user_prompt, session_id: str = "default_user",
                            tools_schema=None, function_map=None, trace_id: str = None,
                            leak_keywords=None):
-        if not trace_id: trace_id = f"REQ-{uuid.uuid4().hex[:8]}"
-        logger.info(f"[{trace_id}] 🚀 任务启动 | 类型: {type(user_prompt).__name__}")
+        # 设置trace_id到ContextVars中
+        if trace_id:
+            set_trace_id(trace_id)
+        # 获取当前上下文的trace_id
+        current_trace_id = get_trace_id()
+        logger.info(f"🚀 任务启动 | 类型: {type(user_prompt).__name__}")
 
         try:
             # --- Tier 0: 前置提示词护栏 (防御补丁) ---
@@ -166,25 +171,25 @@ class AgentDispatcher:
             # 分类检测，精准拦截 - 调整顺序：先检查系统命令，再检查SQL注入
             if re.search(system_command_pattern, input_text, re.I):
                 msg = f"🛡️ [Tier 0 系统命令拦截] 发现系统命令注入，物理熔断。"
-                logger.error(f"[{trace_id}] ❌ 系统命令拦截！内容特征: {input_text[:30]}")
+                logger.error(f"❌ 系统命令拦截！内容特征: {input_text[:30]}")
                 self.memory.add_context(session_id, "user", input_text)
                 self.memory.add_context(session_id, "assistant", msg)
                 return msg
             elif re.search(xss_pattern, input_text, re.I):
                 msg = f"🛡️ [Tier 0 XSS拦截] 发现XSS攻击，物理熔断。"
-                logger.error(f"[{trace_id}] ❌ XSS攻击拦截！内容特征: {input_text[:30]}")
+                logger.error(f"❌ XSS攻击拦截！内容特征: {input_text[:30]}")
                 self.memory.add_context(session_id, "user", input_text)
                 self.memory.add_context(session_id, "assistant", msg)
                 return msg
             elif re.search(sql_injection_pattern, input_text, re.I):
                 msg = f"🛡️ [Tier 0 SQL拦截] 发现SQL注入攻击模式，物理熔断。"
-                logger.error(f"[{trace_id}] ❌ SQL注入拦截！内容特征: {input_text[:30]}")
+                logger.error(f"❌ SQL注入拦截！内容特征: {input_text[:30]}")
                 self.memory.add_context(session_id, "user", input_text)
                 self.memory.add_context(session_id, "assistant", msg)
                 return msg
             elif re.search(sensitive_info_pattern, input_text, re.I):
                 msg = f"🛡️ [Tier 0 敏感信息拦截] 发现敏感信息泄露，物理熔断。"
-                logger.error(f"[{trace_id}] ❌ 敏感信息拦截！内容特征: {input_text[:30]}")
+                logger.error(f"❌ 敏感信息拦截！内容特征: {input_text[:30]}")
                 self.memory.add_context(session_id, "user", input_text)
                 self.memory.add_context(session_id, "assistant", msg)
                 return msg
