@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from config.log_config import logger
-from ai_core.trace_context import get_trace_id
+from common.trace_context import get_trace_id
 
 class DefectManager:
     def __init__(self, platform="ZenTao"):

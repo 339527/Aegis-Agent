@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 from logging.handlers import TimedRotatingFileHandler
-from ai_core.trace_context import get_trace_id
+from common.trace_context import get_trace_id
 
 
 # =====================================================================
@@ -19,7 +19,7 @@ class ColoredFormatter(logging.Formatter):
     MAGENTA = "\x1b[35;1m"
 
     # 日志模版 (精确到毫秒)
-    FORMAT_STR = "%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | %(message)s"
+    FORMAT_STR = "%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | [%(trace_id)s] | %(message)s"
 
     # 级别与颜色的映射字典
     FORMATS = {
@@ -31,11 +31,9 @@ class ColoredFormatter(logging.Formatter):
     }
 
     def format(self, record):
-        # 获取当前上下文的trace_id
+        # 获取当前上下文的trace_id并添加到record中
         trace_id = get_trace_id()
-        # 在日志消息前添加trace_id
-        if hasattr(record, 'msg') and isinstance(record.msg, str):
-            record.msg = f"[{trace_id}] {record.msg}"
+        record.trace_id = trace_id
         log_fmt = self.FORMATS.get(record.levelno, self.FORMAT_STR)
         formatter = logging.Formatter(log_fmt, datefmt='%Y-%m-%d %H:%M:%S')
         return formatter.format(record)
@@ -57,15 +55,13 @@ def setup_logger():
     # 2. 文件落盘输出 (绝对不能带颜色码，否则写进 TXT 里全是乱码)
     class PlainFormatter(logging.Formatter):
         def format(self, record):
-            # 获取当前上下文的trace_id
+            # 获取当前上下文的trace_id并添加到record中
             trace_id = get_trace_id()
-            # 在日志消息前添加trace_id
-            if hasattr(record, 'msg') and isinstance(record.msg, str):
-                record.msg = f"[{trace_id}] {record.msg}"
+            record.trace_id = trace_id
             return super().format(record)
     
     plain_format = PlainFormatter(
-        fmt='%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | %(message)s',
+        fmt='%(asctime)s.%(msecs)03d | %(levelname)-8s | [%(threadName)s] | [%(trace_id)s] | %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     file_handler = TimedRotatingFileHandler(

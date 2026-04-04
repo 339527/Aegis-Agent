@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from zhipuai import ZhipuAI
 from config.log_config import logger
 from ai_core.router import ModelRouter
-from ai_core.trace_context import set_trace_id, get_trace_id
+from common.trace_context import set_trace_id, get_trace_id
 from ai_core.tool_defs import safe_parse_tool_call
 
 
