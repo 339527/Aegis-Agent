@@ -9,6 +9,7 @@ from zhipuai import ZhipuAI
 from config.log_config import logger
 from ai_core.router import ModelRouter
 from ai_core.trace_context import set_trace_id, get_trace_id
+from ai_core.tool_defs import safe_parse_tool_call
 
 
 # ==========================================
@@ -90,10 +91,15 @@ class TaskExecutor(BaseAgent):
         if ai_reply is None: return "ERROR", "🚨 引擎连接失败"
         if 'tool_calls' in ai_reply:
             tool = ai_reply['tool_calls'][0]
-            try:
-                return tool['function']['name'], json.loads(tool['function']['arguments'])
-            except:
-                return "ERROR", "🚨 JSON解析失败"
+            tool_name = tool['function']['name']
+            tool_arguments = tool['function']['arguments']
+            
+            # 使用Pydantic进行安全解析
+            parsed_args = safe_parse_tool_call(tool_arguments, tool_name)
+            if parsed_args:
+                return tool_name, parsed_args.model_dump()
+            else:
+                return "ERROR", "🚨 请求处理失败，请检查输入格式后重试"
         return "NO_ACTION", ai_reply.get('content', "AI 无动作")
 
     async def execute_tool(self, f_name, f_args, function_map):
