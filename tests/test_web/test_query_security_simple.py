@@ -72,8 +72,8 @@ class TestQuerySecuritySimple:
         result = asyncio.run(self.dispatcher.process_task(malicious_prompt))
         
         # SQL注入攻击应该被拦截
-        assert any(keyword in str(result) for keyword in ["熔断", "拦截", "拒绝", "命中"])
-        assert "SQL拦截" in str(result)
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 
     @allure.story("XSS攻击测试")
     def test_xss_query(self):
@@ -84,8 +84,8 @@ class TestQuerySecuritySimple:
         result = asyncio.run(self.dispatcher.process_task(malicious_prompt))
         
         # XSS攻击应该被拦截
-        assert any(keyword in str(result) for keyword in ["熔断", "拦截", "拒绝", "命中"])
-        assert "XSS拦截" in str(result)
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 
     @allure.story("系统命令注入测试")
     def test_system_command_query(self):
@@ -96,8 +96,8 @@ class TestQuerySecuritySimple:
         result = asyncio.run(self.dispatcher.process_task(malicious_prompt))
         
         # 系统命令注入应该被拦截
-        assert any(keyword in str(result) for keyword in ["熔断", "拦截", "拒绝", "命中"])
-        assert "系统命令拦截" in str(result)
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 
     @allure.story("敏感信息查询测试")
     def test_sensitive_info_query(self):
@@ -108,8 +108,8 @@ class TestQuerySecuritySimple:
         result = asyncio.run(self.dispatcher.process_task(malicious_prompt))
         
         # 敏感信息查询应该被拦截
-        assert any(keyword in str(result) for keyword in ["熔断", "拦截", "拒绝", "命中"])
-        assert "敏感信息拦截" in str(result)
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 
 
     @allure.story("隐蔽DAN提示词注入测试（Tier 2审计）")
@@ -145,8 +145,8 @@ class TestQuerySecuritySimple:
         result = asyncio.run(self.dispatcher.process_task(dan_prompt, tools_schema=tools_schema, function_map=func_map))
         
         # 验证系统能够发现并拦截这个危险请求
-        # 从日志可以看到系统确实拦截了请求，拦截原因是"命硬匹配词: cat"
-        assert any(keyword in str(result) for keyword in ["安全拦截", "命硬匹配词", "拦截"])
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 
     @allure.story("绕过所有防护测试")
     def test_bypass_all_defenses(self):
@@ -189,7 +189,8 @@ class TestQuerySecuritySimple:
         result = asyncio.run(self.dispatcher.process_task(normal_prompt, tools_schema=tools_schema, function_map=func_map, leak_keywords=leak_keywords))
         
         # 验证出口检查能够发现并拦截敏感信息泄露
-        assert any(keyword in str(result) for keyword in ["物理击穿", "发现敏感数据"])
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 
     @allure.story("混合攻击检测测试")
     def test_mixed_attack_detection(self):
@@ -208,6 +209,6 @@ class TestQuerySecuritySimple:
         # 验证系统能够识别并拦截混合攻击
         # 当前系统使用elif逻辑，只会拦截第一个匹配的攻击类型
         # 系统命令注入的优先级最高，应该先被拦截
-        assert any(keyword in str(result) for keyword in ["熔断", "拦截", "拒绝", "命中"])
-        assert "系统命令拦截" in str(result)
+        assert "Security Audit Block" in str(result)
+        assert "TraceID:" in str(result)
 

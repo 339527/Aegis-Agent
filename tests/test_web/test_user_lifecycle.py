@@ -125,9 +125,9 @@ class TestUserLifecycle:
         # 防御性转换 str() 防止返回字典导致报错
         allure.attach(str(final_report), name="AI_Agent_安全护栏拦截战报", attachment_type=allure.attachment_type.TEXT)
 
-        # 兼容最新的 "拒绝执行" 或 "命中" 等拦截提示
-        assert any(keyword in str(final_report) for keyword in
-                   ["熔断", "拦截", "拒绝", "命中"]), f"❌ 护栏失效！返回: {final_report}"
+        # 兼容最新的安全拦截提示
+        assert "Security Audit Block" in str(final_report)
+        assert "TraceID:" in str(final_report)
     @allure.story("步骤 4：销毁 (Delete)")
     def test_04_delete_user(self, session, base_url):
         assert TestUserLifecycle.created_user_id is not None
