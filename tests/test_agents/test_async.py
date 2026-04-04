@@ -14,12 +14,12 @@ async def async_sleep_tool(sleep_time=1):
 
 
 @pytest.mark.asyncio
-@patch('ai_core.agents.TaskExecutor.parse_intention')
+@patch('ai_core.agents.AgentDispatcher._call_ai_model')
 @patch('ai_core.agents.AgentDispatcher.async_audit')
-async def test_concurrent_stress_with_async_sleep(mock_async_audit, mock_parse_intention):
+async def test_concurrent_stress_with_async_sleep(mock_async_audit, mock_call_ai_model):
     """验证高并发请求下，Dispatcher 是否能保持稳定（带异步休眠）"""
-    # Mock 意图解析，直接返回工具调用结果
-    mock_parse_intention.return_value = ("async_sleep_tool", {"sleep_time": 1})
+    # Mock AI模型调用，直接返回工具调用结果
+    mock_call_ai_model.return_value = ("async_sleep_tool", {"sleep_time": 1})
     # Mock 安全审计，直接返回安全结果
     mock_async_audit.return_value = {"is_safe": True, "risk_analysis": "[PASS] 安全"}
     
@@ -53,7 +53,7 @@ async def test_concurrent_stress_with_async_sleep(mock_async_audit, mock_parse_i
         assert "异步休眠 1 秒完成" in str(result), f"第 {i+1} 个任务执行失败: {result}"
     
     # 验证 mock 被调用了正确的次数
-    assert mock_parse_intention.call_count == 5
+    assert mock_call_ai_model.call_count == 5
     assert mock_async_audit.call_count == 5
     
     logger.info("并发测试通过，异步调度正常工作！")
