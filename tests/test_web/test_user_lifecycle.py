@@ -72,18 +72,13 @@ class TestUserLifecycle:
         auditor = SecurityAuditor()
         prompt = f"被测用户（ID: {TestUserLifecycle.created_user_id}）的状态改为了 '1'(停用)。分析越权隐患。"
 
-        messages = [{"role": "system",
-                     "content": "你是一个安全漏洞分析师。请用JSON返回: {\"risk_level\": \"High/Low\", \"core_vulnerability\": \"...\"}"},
-                    {"role": "user", "content": prompt}]
-
-        # ✅ 修正为 V2.5 内部审计用的正确逻辑 (或者临时 mock)
-        # 因为 SecurityAuditor 现在设计为内部审计，如果测试需要直接调模型，建议改用 TaskExecutor
-        executor = TaskExecutor()
-        ai_reply = executor._call_model(messages)
-
-        # 🌟 如果云端 AI 连不上，优雅跳过，不报红
-        if not ai_reply and os.getenv("RUN_ENV") == "ci":
-            pytest.skip("☁️ CI 环境 AI 令牌缺失，跳过深度语义审计。")
+        # 在 Mock 模式下，直接跳过 AI 审计测试
+        if auditor.use_mock:
+            pytest.skip("Mock 模式下跳过 AI 安全审计测试")
+        
+        # 真实模式下使用 auditor 进行审计
+        audit_result = asyncio.run(auditor.audit_payload(prompt))
+        assert audit_result.get("is_safe") is not None
 
     @allure.story("步骤 3：核验 (Read) - AI Agent 物理断言 (带高压恶意注入)")
     def test_03_query_user(self):
