@@ -1,337 +1,200 @@
-# Aegis-Agent 技术文档
+# Aegis-Agent Technical Notes
 
-这份文档作为 `README.md` 的扩展附录使用，面向希望进一步了解项目设计与测试结构的读者。
-
-如果你是第一次查看仓库，建议先阅读 `README.md`；如果你想了解模块职责、测试分层和运行细节，再继续阅读本文档。
+Aegis-Agent is a Python codebase for securing and validating **LLM / Agent tool-calling workflows**. The project focuses on three concerns: execution safety, async orchestration, and repeatable verification.
 
 ---
 
-## 1. 项目定位
+## Architecture
 
-Aegis-Agent 是一个面向 **LLM / Agent 工具调用场景** 的 Python 项目原型，关注以下三个问题：
-
-1. **安全**：降低提示词注入、越权工具调用和敏感信息泄露风险
-2. **调度**：通过异步方式组织请求处理流程，避免串行阻塞
-3. **验证**：用自动化测试、对抗演练和 CI 持续验证系统行为
-
-这个项目不是单纯的 Web 自动化脚本集合，而是将：
-
-- AI 安全网关
-- 异步调度逻辑
-- 红蓝对抗演练
-- 自动化测试框架
-
-组合在一起的一个作品集型项目。
-
----
-
-## 2. 当前仓库结构
+The system is organized around a single request pipeline that evaluates user input before, during, and after tool execution.
 
 ```text
-.
-├── ai_core/                 # AI 网关核心：调度、路由、对抗、缺陷记录
-│   ├── agents.py
-│   ├── arena.py
-│   ├── attacker.py
-│   ├── defect_manager.py
-│   └── router.py
-├── api/                     # 业务接口封装
-│   ├── auth_api.py
-│   ├── base_api.py
-│   └── user_api.py
-├── common/                  # 公共组件：日志、Trace、Redis、MySQL、工具函数
-│   ├── crypto_util.py
-│   ├── file_util.py
-│   ├── mysql_util.py
-│   ├── redis_util.py
-│   └── trace_context.py
-├── config/                  # 环境配置与日志配置
-│   ├── env_config.py
-│   └── log_config.py
-├── data/                    # 测试数据
-├── tests/
-│   ├── test_agents/         # AI 网关核心测试
-│   └── test_web/            # 若依业务链路测试
-├── .github/workflows/       # GitHub Actions 配置
-├── .workflow/               # 其他 CI 配置
-├── run.py                   # 测试运行入口
-├── pytest.ini               # Pytest 配置
-├── requirements.txt         # 依赖列表
-└── README.md                # 项目主说明
+User Input
+  ↓
+Tier 0 Rule Checks
+  ↓
+Routing and Budget Check
+  ↓
+Intent Parsing
+  ↓
+Tool-Call Audit
+  ↓
+Tool Execution
+  ↓
+Response Leakage Check
+  ↓
+Return Result / Record Defect
 ```
 
----
-
-## 3. 核心模块说明
-
-### 3.1 `AgentDispatcher`
-
-文件：`ai_core/agents.py`
-
-这是项目的主调度入口，用于串联一次请求的完整处理流程：
-
-1. 输入内容规则检查
-2. 模型路由与预算控制
-3. AI 意图解析
-4. 工具调用安全审计
-5. 工具执行
-6. 输出结果泄露检查
-7. 异常处理与结果返回
-
-它对应了整个项目最核心的“请求生命周期”。
-
-### 3.2 `SecurityAuditor`
-
-文件：`ai_core/agents.py`
-
-负责工具调用前的安全审计。
-
-当前实现支持两种模式：
-- **Mock 模式**：用于日常回归测试，提高执行速度
-- **真实 AI 审计模式**：通过外部模型进行语义风险判断
-
-它的作用是把“字符串规则拦截”之外的语义风险再过滤一层。
-
-### 3.3 `TaskExecutor`
-
-文件：`ai_core/agents.py`
-
-负责两件事：
-- 解析用户意图，决定是否调用工具
-- 执行已允许的工具
-
-在执行阶段，工具函数需要经过白名单装饰器标记，避免未授权函数被直接调用。
-
-### 3.4 `ModelRouter`
-
-文件：`ai_core/router.py`
-
-负责根据任务复杂度选择处理路径，并记录 Token 使用量。
-
-当前实现重点体现两类能力：
-- 低复杂度任务降级处理
-- 当资源账本超过预算时触发熔断
-
-它更像一个轻量版的策略路由层，用于体现成本控制和系统保护思想。
-
-### 3.5 `Arena`
-
-文件：`ai_core/arena.py`
-
-负责红蓝对抗演练流程：
-- 红队生成攻击载荷
-- 蓝队调度器进行拦截或执行
-- 根据结果判断攻防轮次成败
-- 若出现击穿场景，触发缺陷记录
-
-这个模块让项目不只是“写规则”，而是能通过多轮对抗去验证防御是否有效。
-
-### 3.6 `DefectManager`
-
-文件：`ai_core/defect_manager.py`
-
-负责将击穿或高风险场景记录为缺陷输出。
-
-当前实现会把缺陷记录写入本地 `logs/security_defects.jsonl`，作为运行期产物使用，而不是仓库静态内容的一部分。
+This design allows the gateway to:
+- block obvious high-risk input early
+- constrain model-driven tool behavior before execution
+- detect sensitive output before it leaves the system
 
 ---
 
-## 4. 处理链路
+## Components
 
-一次请求的大致处理过程如下：
+### `AgentDispatcher`
+File: `ai_core/agents.py`
 
-```text
-用户输入
-  ↓
-Tier 0 规则检查
-  ↓
-模型路由与预算检查
-  ↓
-AI 意图解析
-  ↓
-工具调用安全审计
-  ↓
-工具执行
-  ↓
-结果泄露检查
-  ↓
-返回结果 / 记录缺陷
-```
+The dispatcher is the main execution path. It coordinates rule checks, routing, intent parsing, audit, execution, response validation, and error handling.
 
-这条链路同时体现了项目的三条主线：
-- 安全主线
-- 调度主线
-- 测试验证主线
+### `SecurityAuditor`
+File: `ai_core/agents.py`
+
+The auditor evaluates tool calls before execution.
+
+Current modes:
+- **Mock mode** for fast regression tests
+- **Real AI audit mode** for semantic risk evaluation
+
+### `TaskExecutor`
+File: `ai_core/agents.py`
+
+The executor is responsible for intent parsing and approved tool execution. Tool functions must be explicitly allowlisted through the project’s decorator-based registration model.
+
+### `ModelRouter`
+File: `ai_core/router.py`
+
+The router provides lightweight complexity-based routing and budget protection. It records token usage and can trip a circuit breaker when limits are exceeded.
+
+### `Arena`
+File: `ai_core/arena.py`
+
+The arena drives the attacker / defender loop. It coordinates payload generation, defensive evaluation, and round-by-round result judgment.
+
+### `DefectManager`
+File: `ai_core/defect_manager.py`
+
+The defect manager records high-risk events and successful defense failures as local defect output. Current output path: `logs/security_defects.jsonl`.
 
 ---
 
-## 5. 安全设计思路
+## Security Model
 
-项目中的安全控制不是单点实现，而是多层组合：
-
-### 5.1 输入规则拦截
-在调度入口处先做快速规则检查，覆盖典型风险，例如：
-- 命令注入
-- SQL 注入
+### Input Filtering
+The dispatcher performs fast rule-based checks at the entrypoint. These checks cover common high-risk patterns such as:
+- command injection
+- SQL injection
 - XSS
-- 敏感信息探测
+- sensitive prompt probing
 
-### 5.2 工具调用审计
-即使通过了规则检查，工具调用在执行前仍会进入审计环节。
+### Tool-Call Audit
+Passing the rule layer does not imply safe execution. Tool calls are audited again before execution to catch semantically unsafe actions.
 
-这层更适合处理“表面正常、语义可疑”的输入场景。
+### Response Validation
+Tool output is inspected before it is returned. If the response contains sensitive keywords, the dispatcher blocks it at the output stage.
 
-### 5.3 输出结果检查
-工具执行后，如果返回内容中包含敏感关键词，系统会在返回前再次拦截。
-
-### 5.4 缺陷记录
-一旦出现安全击穿或高风险事件，结果会被记录到本地缺陷输出中，形成测试闭环。
+### Defect Recording
+Security failures and breakthrough cases are persisted as local defect records for later analysis and regression coverage.
 
 ---
 
-## 6. 异步与并发设计
+## Async Execution
 
-项目使用 `asyncio` 组织调度流程，重点价值在于：
+The execution path is built on `asyncio`.
 
-- 支持并发请求处理
-- 避免模拟 AI 调用或异步工具执行时的串行阻塞
-- 为后续接入真实外部调用保留异步结构
+This enables the project to:
+- process concurrent requests without serial blocking
+- support async tools and external-call style workflows
+- apply timeout boundaries around AI inference and execution steps
 
-在测试中，`tests/test_agents/test_async.py` 用并发休眠工具模拟多个请求同时执行，用来验证：
-- 总耗时是否接近单次耗时
-- 调度器是否具备并发执行特征
-
-这个测试场景是项目中比较容易向面试官说明“异步价值”的部分。
+`tests/test_agents/test_async.py` validates this behavior with concurrent async tasks and checks total execution time against expected concurrency characteristics.
 
 ---
 
-## 7. 测试体系
+## Testing Strategy
 
-### 7.1 测试分层
+### `tests/test_agents/`
+This directory covers the core gateway behavior:
+- rule interception
+- routing behavior
+- async execution
+- adversarial simulation
+- defect recording
 
-#### `tests/test_agents/`
-这是项目最核心的测试目录，适合作为作品集展示重点。
+### `tests/test_web/`
+This directory covers business integration flows:
+- RuoYi login
+- user lifecycle operations
+- Redis / MySQL backed assertions
+- environment-dependent business checks
 
-覆盖的内容包括：
-- 网关逻辑与拦截行为
-- 异步并发能力
-- 红蓝对抗与缺陷记录
+### Markers
+Defined in `pytest.ini`:
+- `smoke`
+- `p0`
+- `p1`
+- `db`
+- `real_ai`
 
-#### `tests/test_web/`
-这是面向传统业务系统的集成验证层。
-
-覆盖的内容包括：
-- 若依登录
-- 用户新增与生命周期
-- 与 Redis / MySQL / 本地业务环境有关的链路测试
-
-这部分更适合体现“自动化测试落地能力”，但不应盖过项目的核心主题。
-
-### 7.2 Marker 设计
-
-`pytest.ini` 中定义了多种测试标记：
-
-- `smoke`：冒烟测试
-- `p0`：核心链路测试
-- `p1`：异常边界测试
-- `db`：依赖数据库断言的测试
-- `real_ai`：调用真实模型的演练测试
-
-这些标记让项目在“日常回归”“真实演练”“环境依赖测试”之间可以明确分流。
-
-### 7.3 最小验证路径
-
-如果只是快速验证仓库的核心能力，建议优先运行：
+### Recommended Commands
+Core tests:
 
 ```bash
 pytest tests/test_agents/ -v -m "not real_ai"
 ```
 
-这条路径通常不需要真实 AI 和完整业务环境，更适合作为作品集演示入口。
+Full suite:
+
+```bash
+pytest
+```
+
+Real-model adversarial tests:
+
+```bash
+pytest -m "real_ai"
+```
 
 ---
 
-## 8. 运行方式
+## Runtime and Reporting
 
-### 8.1 交互式运行入口
+Interactive runner:
 
 ```bash
 python run.py
 ```
 
-支持三种模式：
-- 常规回归测试（Mock 模式）
-- 真实 AI 演练测试
-- 全量测试
-
-### 8.2 直接运行 Pytest
-
-```bash
-pytest -m "not real_ai"
-pytest -m "real_ai"
-pytest
-```
-
-### 8.3 生成 Allure 报告
+Allure report generation:
 
 ```bash
 allure generate ./reports/allure_raw -o ./reports/allure_report --clean
 ```
 
-说明：
+Locally generated outputs include:
 - `reports/`
-- `logs/`
-- `.pytest_cache/`
 - `tests/test_web/reports/`
-
-这些目录属于本地运行生成内容，不作为仓库源文件维护。
-
----
-
-## 9. CI 说明
-
-当前仓库至少包含两类 CI 配置：
-
-### 9.1 GitHub Actions
-文件：`.github/workflows/ci.yml`
-
-公开展示时，推荐优先以这份配置作为主要 CI 入口理解。
-
-### 9.2 其他 CI 配置
-文件：`.workflow/agent-ci.yml`
-
-这类配置更多反映不同平台下的自动执行方式，可作为补充阅读，不必作为作品集主线重点。
+- `logs/`
+- `logs/security_defects.jsonl`
+- `.pytest_cache/`
+- `__pycache__/`
+- `.env`
 
 ---
 
-## 10. 适合作品集展示的能力点
+## Repository Structure
 
-从技术表达角度，这个项目更适合展示以下能力：
-
-- **Python 工程能力**：模块拆分、配置管理、日志处理、运行入口设计
-- **测试开发能力**：Pytest 分层、Marker 管理、Mock/真实模式分流、报告生成
-- **异步编程能力**：基于 Asyncio 的并发调度与超时控制
-- **AI 应用安全意识**：Prompt Injection 风险识别、工具调用审计、结果泄露检查
-- **问题闭环能力**：从攻击模拟、拦截、记录到缺陷输出
-
----
-
-## 11. 后续可继续完善的方向
-
-如果继续打磨这个项目，可以优先考虑：
-
-1. 增加覆盖率统计与质量门禁
-2. 补充架构图、Allure 报告截图和 CI 成功截图
-3. 补充更系统的性能基准与数据对比
-4. 对接真实缺陷管理平台，而不是仅写本地 JSONL
-5. 进一步区分单元测试、集成测试和真实 AI 演练的运行入口
+```text
+.
+├── ai_core/                 # gateway core: orchestration, routing, adversarial loop, defect output
+├── api/                     # business API wrappers
+├── common/                  # shared utilities: trace, redis, mysql, file helpers
+├── config/                  # environment and logging configuration
+├── data/                    # test data
+├── tests/                   # automated tests
+├── .github/workflows/       # GitHub Actions workflows
+├── .workflow/               # additional CI configuration
+├── run.py                   # test runner entrypoint
+├── pytest.ini               # pytest configuration
+└── requirements.txt         # dependencies
+```
 
 ---
 
-## 12. 阅读建议
+## CI
 
-- 想快速了解项目：先看 `README.md`
-- 想理解调度与安全主线：看 `ai_core/agents.py`
-- 想理解并发验证：看 `tests/test_agents/test_async.py`
-- 想理解对抗与缺陷记录：看 `ai_core/arena.py`、`ai_core/defect_manager.py`
-- 想理解传统业务系统测试落地：看 `tests/test_web/`
+- `/.github/workflows/ci.yml` — GitHub Actions workflow
+- `/.workflow/agent-ci.yml` — additional platform-specific CI configuration
