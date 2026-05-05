@@ -12,10 +12,15 @@ __pycache__/
 # 4. Allure 生成的本地报告临时数据（每次运行都会变，没必要上传）
 temps/
 reports/
+tests/test_web/reports/
 
-# 5. 虚拟环境（如果你是在项目目录下建的 venv）
+# 5. 运行期输出与缺陷记录
+security_defects.jsonl
+
+# 6. 虚拟环境（如果你是在项目目录下建的 venv）
 venv/
 env/
 
-#6.日志文件
+# 7. 日志文件
 logs/
+*.log

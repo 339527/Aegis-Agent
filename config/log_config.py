@@ -1,3 +1,4 @@
+import io
 import os
 import sys
 import logging
@@ -39,6 +40,22 @@ class ColoredFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+def _build_console_stream():
+    if os.name != 'nt':
+        return sys.stdout
+
+    stream = sys.stdout
+    encoding = getattr(stream, 'encoding', None) or 'utf-8'
+    if encoding.lower() == 'utf-8':
+        return stream
+
+    try:
+        return io.TextIOWrapper(stream.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+    except (AttributeError, ValueError):
+        return stream
+
+
+
 def setup_logger():
     # 确保日志目录存在
     log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
@@ -48,7 +65,7 @@ def setup_logger():
     log_file = os.path.join(log_dir, 'aegis_gateway.log')
 
     # 1. 统一控制台输出 (全量走 stdout，带 ANSI 颜色)
-    unified_console_handler = logging.StreamHandler(sys.stdout)
+    unified_console_handler = logging.StreamHandler(_build_console_stream())
     unified_console_handler.setFormatter(ColoredFormatter())
     unified_console_handler.setLevel(logging.INFO)
 

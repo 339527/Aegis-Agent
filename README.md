@@ -1,239 +1,304 @@
-# 🛡️ Aegis-Agent V2.5 | 企业级大模型异步安全网关
+# Aegis-Agent
 
-[![Python 3.14+](https://img.shields.io/badge/Python-3.14%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Concurrency Asyncio](https://img.shields.io/badge/Concurrency-Asyncio-success?style=for-the-badge&logo=fastapi)](https://docs.python.org/3/library/asyncio.html)
-[![Security Dual-Track WAF](https://img.shields.io/badge/Security-Dual--Track%20WAF-red?style=for-the-badge&logo=strapi)](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
-[![Test Pytest + Allure](https://img.shields.io/badge/Test-Pytest%20%2B%20Allure-yellow?style=for-the-badge&logo=pytest)](https://docs.pytest.org/)
-[![AI Model GLM-4](https://img.shields.io/badge/AI-Model-GLM--4-blueviolet?style=for-the-badge&logo=brain)](https://open.bigmodel.cn/)
+一个面向 **LLM / Agent 工具调用场景** 的 Python 项目，聚焦三个问题：
 
-## 📌 项目愿景 (Project Vision)
-**Aegis-Agent** 并非传统的应用层大模型套壳（Wrapper），而是定位于 **2026 企业级 AI 原生应用底层安全基建 (Infrastructure)**。
+1. **安全**：防止提示词注入、越权工具调用和敏感信息泄露
+2. **调度**：用异步方式处理多请求，避免串行阻塞
+3. **验证**：通过自动化测试、对抗演练和 CI 持续验证系统行为
 
-在 LLM 落地生产环境的“最后一公里”，本中间件专注于解决两大核心痛点：
-1. **高延迟并发阻塞**：通过异步调度确保海量请求下的系统吞吐与稳定性。
-2. **AI 越权调用风险**：建立“物理+语义”双重防御阵列，防止 Agent 工具调用演变为 RCE 漏洞。
+它不是单纯的 Web 自动化脚本集合，而是一个把 **AI 安全网关、自动化测试框架、攻防演练机制** 组合在一起的项目原型。
 
 ---
 
-## ✨ 核心架构亮点 (Technical Highlights)
+## 项目概览
 
-### 🚀 1. 全链路 Asyncio 高并发调度底座
-- **技术实现**：基于 Python 3.14 异步事件循环架构，彻底解耦 I/O 等待。
-- **性能提升**：测试显示异步处理比同步处理快约10倍
-- **测试验证**：并发压测测试耗时约为 0.15 秒（使用 mock 消除网络 I/O 耗时）。
+Aegis-Agent 以 `AgentDispatcher` 为核心调度入口，围绕一次请求建立完整处理链路：
 
-### 🛡️ 2. Fail-Fast 双轨防御护栏 (Dual-Track WAF)
-- **Tier 0 前置护栏**：快速检查敏感关键词（如 `ZHIPU_API_KEY`、`SECRET_FLAG`）。
-- **Tier 1 物理断路器 (Regex)**：拦截 `DROP`、`OR '1'='1'` 等显性注入攻击，**节省 80% 以上的无效 Token 成本**。
-- **Tier 2 语义防火墙 (AI Audit)**：在大模型 `Function Calling` 执行前进行深度意图审计，拦截隐蔽的 Prompt Injection 变异攻击。
-- **出口审计**：终极防线，防止敏感数据泄露。
+- 输入内容规则检查
+- 模型路由与预算控制
+- AI 意图解析
+- 工具调用安全审计
+- 工具执行
+- 输出结果泄露检查
+- 缺陷记录与日志追踪
 
-### 🧠 3. $O(1)$ 极速滑动窗口记忆 (Memory Management)
-- **底层机制**：采用 `collections.deque` 双端队列管理 Session 会话状态。
-- **内存安全**：通过限制会话数量自动删除旧数据，防止内存占用过多
-
-### 🔍 4. TraceID 全链路可观测性 (Observability)
-- **链路追踪**：为每一次请求注入唯一的 `REQ-UUID`。
-- **故障回溯**：集成 `TimedRotatingFileHandler` 滚动日志体系，支持在日志中进行攻击链路还原与故障定位。
-
-### 🤖 5. 动态对抗演习系统
-- **红队 Agent**：具备自我进化能力的 AI 渗透专家，支持编码绕过、字符拆分、逻辑绕过等高级攻击策略。
-- **蓝队防御**：多层次防御体系，实时拦截各类攻击。
-- **反馈闭环**：红队根据拦截反馈自动优化攻击策略，持续提升系统安全性。
-
-### 📊 6. 智能路由与成本控制
-- **任务分级路由**：根据任务复杂度动态分配模型资源（LOCAL_MOCK 或 GLM-4）。
-- **Token 预算管理**：每日 Token 消耗监控与熔断机制，默认限额 50,000 Tokens。
-- **降级策略**：低复杂度任务自动路由至免费本地引擎，降低成本。
+同时，仓库中还包含了基于若依系统的 Web 业务链路测试，用于验证自动化测试框架在传统业务系统中的落地方式。
 
 ---
 
-## ⚙️ 工业级目录设计 (Architecture)
+## 核心能力
 
-```text
-├── .github/workflows/      # CI/CD 自动化流水线 (GitHub Actions)
-├── .workflow/              # 工作流配置
-├── ai_core/                # 🤖 AI 网关核心调度引擎
-│   ├── agents.py           # 调度中枢、安全审计、任务执行
-│   ├── arena.py            # 动态对抗战场
-│   ├── attacker.py         # 红队 Agent
-│   ├── defect_manager.py   # 缺陷管理
-│   ├── router.py           # 智能路由与熔断器
-│   ├── tool_defs.py        # 工具定义
-│   └── tool_executor.py    # 工具执行器
-├── api/                    # 🌐 接口协议层封装
-│   ├── __init__.py
-│   ├── auth_api.py
-│   ├── base_api.py
-│   └── user_api.py
-├── common/                 # 🛠️ 底层组件库
-│   ├── __init__.py
-│   ├── crypto_util.py
-│   ├── file_util.py
-│   ├── mysql_util.py
-│   └── redis_util.py
-├── config/                 # ⚙️ 环境配置与日志策略
-│   ├── __init__.py
-│   ├── env_config.py
-│   └── log_config.py
-├── data/                   # 📊 测试数据
-│   ├── __init__.py
-│   └── user_add_data.yaml
-├── tests/                  # 🎯 自动化测试集
-│   ├── test_agents/        # ➡️ Agent 核心功能测试
-│   │   ├── test_arena.py
-│   │   ├── test_async.py
-│   │   └── test_gateway_logic.py
-│   ├── test_web/           # ➡️ Web 业务链路测试
-│   │   ├── __init__.py
-│   │   ├── test_ruoyi_login.py
-│   │   ├── test_user_add_ddt.py
-│   │   └── test_user_lifecycle.py
-│   ├── __init__.py
-│   └── conftest.py
-├── .gitignore
-├── Aegis-Agent_V2.5_技术文档.md  # 详细技术文档
-├── pytest.ini
-├── README.md
-├── requirements.txt
-└── run.py                  # 主运行入口
-```
+### 1. 多层安全防护
+- 在请求进入执行链路前进行规则拦截
+- 覆盖命令注入、SQL 注入、XSS、敏感信息泄露等典型风险
+- 对工具调用增加语义级审计，降低 Prompt Injection 与越权调用风险
+- 对工具执行结果进行二次检查，避免敏感信息回显
 
----
+核心实现：`ai_core/agents.py`
 
-## 🚀 快速开始
+### 2. 异步调度与超时控制
+- 基于 `asyncio` 组织请求处理流程
+- 支持并发请求压测，验证异步执行能力
+- 通过超时控制避免 AI 推理或工具执行长时间阻塞
 
-### 环境要求
-- Python 3.14+
-- 智谱 AI API Key（需配置环境变量）
+相关实现：`ai_core/agents.py`、`tests/test_agents/test_async.py`
 
-### 安装依赖
-```bash
-pip install -r requirements.txt
-```
+### 3. 智能路由与资源控制
+- 根据任务复杂度选择不同处理路径
+- 维护 Token 使用账本
+- 在预算超限时触发熔断，保护系统稳定性
 
-### 环境配置
-创建 `.env` 文件并配置环境变量：
-```bash
-# .env 文件
-ZHIPU_API_KEY=your_api_key_here
-```
+相关实现：`ai_core/router.py`
 
-### 运行测试
-```bash
-# 运行所有测试
-python run.py
+### 4. 红蓝对抗演练
+- 红队 Agent 生成攻击载荷
+- 蓝队调度器执行拦截和审计
+- 支持多轮对抗与反馈更新
+- 对成功击穿的场景自动记录缺陷
 
-# 生成 Allure 测试报告
-allure generate ./reports/allure_raw -o ./reports/allure_report --clean
-```
+相关实现：`ai_core/arena.py`、`ai_core/attacker.py`、`ai_core/defect_manager.py`
 
----
+### 5. 自动化测试与报告
+- 基于 `Pytest` 组织测试
+- 使用 `Allure` 生成测试报告
+- 支持常规回归测试与真实 AI 演练分流
+- 已接入 GitHub Actions 持续执行测试
 
-## 🔄 更新日志
-
-### V2.5.1 架构师级日志审计修复
-
-#### 修复内容
-1. **分类器错误分类问题修复**：调整检查顺序，先检查系统命令再检查SQL注入，避免系统命令被误判为SQL注入
-2. **数据库连接池漏水问题修复**：实现单例模式连接池，避免重复创建连接导致Too many connections错误
-3. **并发压测欺骗问题修复**：验证异步任务正确等待执行完成，显示合理的耗时（约0.15秒）
-4. **红队攻击载荷日志记录**：添加红队攻击载荷的日志记录，便于监控和分析攻击过程
-5. **Tier 0防御规则优化**：拆解"上帝正则"为分类检测，提高拦截准确性
-6. **文档更新**：修正技术文档和README中的错误数据
-
-#### 技术改进
-- 优化了Tier 0防御规则的检查顺序，提高了分类准确性
-- 实现了数据库连接池，避免连接泄漏
-- 验证了异步架构的正确性，支持真实的并发处理
-- 添加了详细的攻击载荷日志记录
-
----
-
-## 🧪 测试验证
-
-### 核心功能测试
-- **并发压测**：验证 Asyncio Dispatcher 的高吞吐调度能力
-- **安全护栏**：验证三级防护机制的有效性
-- **成本控制**：验证 Token 熔断机制
-- **动态对抗**：验证红队攻击与蓝队防御的闭环
-
-### 集成测试
-- **若依系统集成**：验证与传统 Web 系统的无缝集成
-- **用户生命周期**：验证用户管理、权限控制等业务功能
-- **数据库直连**：验证 MySQL、Redis 等组件的稳定性
-
----
-
-## 技术文档
-
-详细的技术文档已生成，请查看：
-- [Aegis-Agent_V2.5_技术文档.md](Aegis-Agent_V2.5_技术文档.md)
-
-文档内容包括：
-- 项目结构
-- 核心功能模块
-- 安全防御系统
-- 测试验证
-- 部署与运维指南
-
----
-
-## 核心功能模块
-
-### AgentDispatcher - 调度中心
-系统的核心，负责处理用户请求的整个流程，包括安全检查、路由决策、意图分析、工具执行等。
-
-### SecurityAuditor - 安全审计
-负责检查工具调用是否安全，包括参数检查和意图分析。
-
-### ModelRouter - 智能路由
-负责决定用哪个模型处理请求，控制Token使用成本。
-
-### AttackerAgent - 红队攻击
-模拟黑客攻击的模块，生成各种攻击代码测试系统安全性。
-
-### Arena - 攻防对抗系统
-协调红队和蓝队的对抗，记录对抗过程和结果。
-
-### DefectManager - 漏洞记录
-负责记录漏洞信息，生成漏洞报告。
-
----
-
-## 安全防御系统
-
-### 四层防御机制
-- **第一层**：关键词检查，快速拦截明显的攻击
-- **第二层**：参数检查，验证工具调用的安全性
-- **第三层**：AI意图分析，识别隐藏的攻击
-- **第四层**：结果检查，防止敏感数据泄露
-
-### 攻防对抗系统
-- 自动生成各种攻击代码测试系统
-- 根据防御结果调整攻击策略
-- 持续优化系统的防御能力
-
-### 漏洞记录
-- 检测到数据泄露时自动记录漏洞
-- 生成详细的漏洞报告
-- 支持自动创建漏洞工单
+相关实现：`run.py`、`pytest.ini`、`.github/workflows/ci.yml`
 
 ---
 
 ## 技术栈
 
-- **编程语言**：Python 3.14+
-- **并发框架**：Asyncio（处理多任务同时执行）
+- **语言**：Python
+- **异步框架**：Asyncio
 - **AI 模型**：智谱 AI GLM-4
-- **测试框架**：Pytest（写测试用例的工具）
-- **数据库**：MySQL、Redis（存数据的）
-- **工具库**：requests、httpx（发网络请求）、PyYAML（解析YAML文件）、PyMySQL（连MySQL）、python-dotenv（读环境变量）
+- **测试框架**：Pytest、pytest-asyncio、Allure
+- **网络请求**：requests、httpx
+- **数据与配置**：PyYAML、python-dotenv
+- **存储组件**：MySQL、Redis
+- **CI**：GitHub Actions
 
 ---
 
-## 关于作者
+## 仓库结构
 
-专注于 AI Agent 底层开发与安全系统建设。
-致力于让大模型在企业环境中安全稳定地运行。
+```text
+.
+├── ai_core/                 # AI 网关核心：调度、路由、对抗、缺陷记录
+│   ├── agents.py
+│   ├── arena.py
+│   ├── attacker.py
+│   ├── defect_manager.py
+│   └── router.py
+├── api/                     # 业务接口封装
+│   ├── auth_api.py
+│   ├── base_api.py
+│   └── user_api.py
+├── common/                  # 通用组件：日志、Redis、MySQL、加解密、文件工具
+├── config/                  # 环境配置与日志配置
+├── data/                    # 测试数据
+├── tests/
+│   ├── test_agents/         # AI 网关核心测试
+│   └── test_web/            # 若依业务链路测试
+├── reports/                 # Allure 原始结果与报告产物
+├── run.py                   # 测试运行入口
+├── pytest.ini               # Pytest 配置
+└── requirements.txt         # 依赖列表
+```
 
+---
+
+## 处理链路
+
+```mermaid
+flowchart TD
+    A[用户输入] --> B[Tier 0 规则检查]
+    B --> C[模型路由与预算检查]
+    C --> D[AI 意图解析]
+    D --> E[工具调用安全审计]
+    E --> F[工具执行]
+    F --> G[结果泄露检查]
+    G --> H[返回结果]
+    G --> I[缺陷记录]
+```
+
+---
+
+## 测试设计
+
+### 测试分层
+
+- **网关逻辑测试**：验证路由、审计、拦截和异常处理
+- **并发测试**：验证异步调度是否具备并发执行效果
+- **攻防演练测试**：验证红蓝对抗与缺陷记录闭环
+- **Web 集成测试**：验证若依系统登录、用户管理等业务链路
+
+### 测试目录定位
+
+- `tests/test_agents/`：作品集的核心展示内容，适合优先阅读和运行
+- `tests/test_web/`：传统业务系统集成验证能力的补充，需要更多本地环境依赖
+- 两类测试不是并列主线，而是“核心能力 + 集成落地”的关系
+
+### Marker 约定
+
+项目在 `pytest.ini` 中定义了以下测试标记：
+
+- `smoke`：冒烟测试
+- `p0`：核心链路测试
+- `p1`：异常边界测试
+- `db`：依赖数据库断言的测试
+- `real_ai`：调用真实 AI 的演练测试
+
+### 已覆盖的代表场景
+
+- 并发请求调度验证：`tests/test_agents/test_async.py`
+- 网关逻辑与安全拦截：`tests/test_agents/test_gateway_logic.py`
+- 红蓝对抗与缺陷记录：`tests/test_agents/test_arena.py`
+- 若依登录与用户管理：`tests/test_web/`
+
+---
+
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 配置环境变量
+
+在项目根目录创建 `.env` 文件：
+
+```bash
+ZHIPU_API_KEY=your_api_key_here
+```
+
+如果需要运行本地业务链路测试，还需根据实际环境补充若依系统、Redis、MySQL 相关配置。
+
+### 3. 最小可运行路径
+
+如果你是第一次查看这个项目，建议按下面顺序快速验证：
+
+```bash
+# 1) 安装依赖
+pip install -r requirements.txt
+
+# 2) 先运行核心测试，避免依赖真实 AI 和外部业务环境
+pytest tests/test_agents/ -v -m "not real_ai"
+```
+
+这个路径最适合招聘方或面试官快速理解项目的核心能力：
+- 异步调度
+- 安全拦截
+- 攻防演练
+- 缺陷闭环
+
+如果要继续体验：
+- `tests/test_web/` 需要本地业务环境支持
+- `real_ai` 测试会调用真实模型并消耗 API 额度
+
+---
+
+## 运行方式
+
+### 方式 1：使用交互式运行器
+
+```bash
+python run.py
+```
+
+可选择：
+- 常规回归测试（Mock 模式）
+- 真实 AI 演练测试
+- 全量测试
+
+### 方式 2：直接运行 Pytest
+
+```bash
+# 排除真实 AI，用于日常回归
+pytest -m "not real_ai"
+
+# 只运行真实 AI 演练
+pytest -m "real_ai"
+
+# 运行全部测试
+pytest
+```
+
+### 方式 3：生成 Allure 报告
+
+```bash
+allure generate ./reports/allure_raw -o ./reports/allure_report --clean
+```
+
+### 本地生成文件说明
+
+以下内容属于运行或测试过程中的**本地生成产物**，不会作为作品集仓库内容维护：
+
+- `.env`：本地环境变量配置
+- `reports/`：Allure 原始结果与 HTML 报告
+- `tests/test_web/reports/`：Web 测试阶段产生的报告数据
+- `logs/`：运行日志
+- `logs/security_defects.jsonl`：缺陷记录输出
+- `.pytest_cache/`、`__pycache__/`：缓存文件
+
+如果你克隆仓库后运行测试，这些目录或文件可能会自动生成，这是正常现象。
+
+---
+
+## CI 说明
+
+仓库已配置 GitHub Actions：
+
+- 触发时机：`push`
+- 执行环境：`ubuntu-latest`
+- Python 版本：`3.10`
+- 执行命令：`python run.py`
+
+配置文件：`.github/workflows/ci.yml`
+
+---
+
+## 项目适合展示的能力点
+
+如果你把这个仓库作为作品集项目，它更适合体现以下能力：
+
+- **Python 工程能力**：模块拆分、配置管理、日志追踪、异常处理
+- **测试开发能力**：Pytest 分层、Mock/真实环境分流、报告生成、CI 集成
+- **异步编程能力**：基于 Asyncio 的并发调度与超时控制
+- **AI 应用安全意识**：工具调用审计、Prompt Injection 防护、结果泄露检查
+- **问题闭环能力**：从攻击模拟、拦截、记录到缺陷落盘
+
+---
+
+## 可补充的展示素材
+
+如果要继续把这个仓库打磨成更完整的作品集，可以补充：
+
+- 架构图截图：展示调度、审计、执行与缺陷记录关系
+- Allure 报告截图：展示测试结果与分类
+- CI 成功截图：展示自动化执行结果
+- 关键测试用例截图：展示异步压测或安全拦截场景
+
+---
+
+## 后续可继续完善的方向
+
+- 增加覆盖率统计与质量门禁
+- 输出更直观的架构图与测试结果截图
+- 丰富更多攻击样本与防御规则
+- 补充真实环境下的性能数据与基准对比
+- 将缺陷记录对接到真实缺陷管理平台
+
+---
+
+## 说明
+
+本项目适合作为以下方向的作品集或项目经历：
+
+- 测试开发 / 自动化测试 / SDET
+- Python 后端开发
+- AI 应用工程
+- AI 安全与 LLM Guardrail 相关岗位

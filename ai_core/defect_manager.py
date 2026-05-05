@@ -15,9 +15,10 @@ class DefectManager:
         """将缺陷数据推送到缺陷跟踪系统"""
         trace_id = get_trace_id()
         
-        # 使用绝对路径确保文件总是写入到项目根目录
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        file_path = os.path.join(project_root, "security_defects.jsonl")
+        output_dir = os.path.join(project_root, "logs")
+        os.makedirs(output_dir, exist_ok=True)
+        file_path = os.path.join(output_dir, "security_defects.jsonl")
         
         # 添加时间戳和trace_id
         defect_data["timestamp"] = datetime.now().isoformat()
