@@ -1,69 +1,74 @@
-# Aegis-Agent V2.5
+# Aegis-Agent
 
-企业级大模型异步安全网关 | AI Native Application Security Infrastructure
+异步安全网关 | Asynchronous Security Gateway for LLM Applications
 
-## 核心定位
+[![Python](https://img.shields.io/badge/Python-3.14+-blue.svg)](https://www.python.org/)
+[![Asyncio](https://img.shields.io/badge/Asyncio-Enabled-green.svg)](https://docs.python.org/3/library/asyncio.html)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**解决 LLM 落地生产环境的双重挑战：**
+## Overview
 
-1. **高延迟并发阻塞** → Asyncio 异步调度，海量请求下依然吞吐稳定
-2. **AI 越权调用风险** → "物理+语义"双重防御，Agent 工具调用不再演变 RCE
+Aegis-Agent 是一个基于 Python Asyncio 的企业级 LLM 安全网关，设计用于解决大模型应用落地生产环境时的两大核心问题：
 
----
+- **并发性能**：异步架构支撑海量请求，吞吐量稳定
+- **安全防护**：四层防御体系拦截越权调用、提示词注入等攻击
 
-## 核心架构
-
-### 全链路 Asyncio 异步调度
+## Architecture
 
 ```
-用户请求 → AgentDispatcher → SecurityAuditor(Tier 0-3)
-                              ↓
-                          TaskExecutor
-                              ↓
-                         ModelRouter
+┌─────────────────────────────────────────────────────────┐
+│                    AgentDispatcher                       │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │              SecurityAuditor                       │  │
+│  │  Tier 0 → Tier 1 → Tier 2 → Tier 3             │  │
+│  └─────────────────────────────────────────────────┘  │
+│                          ↓                              │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │              TaskExecutor                         │  │
+│  └─────────────────────────────────────────────────┘  │
+│                          ↓                              │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │              ModelRouter + CircuitBreaker         │  │
+│  └─────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-- **零阻塞**：基于 Python asyncio 单线程事件循环，I/O 等待彻底解耦
-- **零妥协**：异步处理比同步快 10 倍（实测 0.15 秒 vs 1.5 秒）
+## Features
 
-### 四层 Fail-Fast 防御护栏
+### 四层安全防御
 
-| 层级 | 组件 | 职责 |
-|------|------|------|
-| **Tier 0** | `SecurityAuditor.check_sensitive_keywords` | 关键词光速拦截（ZHIPU_API_KEY/SECRET_FLAG） |
-| **Tier 1** | `SecurityAuditor.check_malicious_patterns` | 正则断路器（SQL注入/命令注入） |
-| **Tier 2** | `SecurityAuditor.audit_payload` | 大模型语义审计（Prompt Injection） |
-| **Tier 3** | `@agent_tool` 白名单装饰器 | 出口审计 + 权限校验 |
-
-### 智能路由与成本控制
-
-- **LOCAL_MOCK**：简单任务，零成本
-- **COMMON**：中等复杂度，平衡成本
-- **GLM-4**：复杂逻辑，高性能
-- **Token 熔断器**：1000 Tokens 预算自动熔断
+| Tier | 检测方式 | 适用场景 |
+|------|---------|---------|
+| Tier 0 | 关键词匹配 | 敏感信息泄露（API Key、Password） |
+| Tier 1 | 正则表达式 | SQL 注入、命令注入 |
+| Tier 2 | 大模型语义审计 | 提示词注入、越狱攻击 |
+| Tier 3 | 白名单 + 出口审计 | 权限控制、数据泄露 |
 
 ### 动态红蓝对抗
 
-- **AttackerAgent**：5 种绕过策略（编码/字符拆分/大小写/空格），支持真实 AI 生成
-- **Arena**：5 轮对抗循环，红队根据拦截反馈自动变异
+- **AttackerAgent**：支持 5 种绕过策略自动变异
+- **Arena**：5 轮攻防对抗，结果自动记录
 - **DefectManager**：攻击成功时自动提单至禅道
 
----
+### 智能路由
 
-## 快速开始
+- 根据任务复杂度自动选择模型（LOCAL_MOCK / COMMON / GLM-4）
+- Token 预算熔断（默认 1000 Tokens/天）
 
-### 安装依赖
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 配置环境变量
+### Environment Variables
 
 ```bash
-# .env 文件
+# .env
 ZHIPU_API_KEY=your_api_key_here
 ```
+
+## Quick Start
 
 ### 运行测试
 
@@ -71,123 +76,74 @@ ZHIPU_API_KEY=your_api_key_here
 # 交互式菜单
 python run.py
 
-# 或命令行模式
-python -m pytest tests/test_agents/ -v
+# 常规回归测试（Mock 模式，零成本）
+python run.py
+# → 选择 1
+
+# 高烈度演练（真实 AI，消耗 Token）
+python run.py
+# → 选择 2
 ```
 
----
-
-## 分级自动化测试策略
-
-### 测试分级
-
-| 模式 | 命令 | 成本 | 场景 |
-|------|------|------|------|
-| **常规回归** | `python run.py` → 选 1 | 零 Token | CI 流水线，代码 Push 自动触发 |
-| **高烈度演练** | `python run.py` → 选 2 | 消耗 API | 每周安全演练，红蓝对抗 |
-| **全量测试** | `python run.py` → 选 3 | 混合模式 | 发布前验证 |
-
-### 测试标记
+### 代码示例
 
 ```python
-# 常规测试：默认 Mock 模式
-@pytest.mark.asyncio
-async def test_xxx():
-    pass
+from ai_core.agents import AgentDispatcher, SecurityAuditor
 
-# 高烈度演练：使用真实 AI
-@pytest.mark.asyncio
-@pytest.mark.real_ai
-async def test_real_duel():
-    pass
+# 初始化
+auditor = SecurityAuditor()  # 自动识别 USE_MOCK_AUDIT 环境变量
+dispatcher = AgentDispatcher(auditor=auditor)
+
+# 处理请求
+result = await dispatcher.process_task(
+    prompt="查询用户信息",
+    tools_schema=[...],
+    function_map={...}
+)
 ```
 
-### 测试结果
+## Project Structure
 
 ```
-常规回归测试：21 passed, 1 skipped, 1 deselected (~5s)
-高烈度演练测试：1 passed (~32s，真实 AI)
-全量测试：22 passed, 1 skipped (~5s)
+├── ai_core/                    # 核心模块
+│   ├── agents.py              # AgentDispatcher, SecurityAuditor, TaskExecutor
+│   ├── arena.py               # 红蓝对抗竞技场
+│   ├── attacker.py            # 红队 Agent
+│   ├── defect_manager.py      # 缺陷管家
+│   └── router.py              # 智能路由 + 熔断器
+├── api/                       # API 封装
+├── common/                    # 工具模块
+│   └── trace_context.py       # TraceID 链路追踪
+├── config/                    # 配置
+├── tests/                     # 测试套件
+│   ├── test_agents/           # Agent 核心测试
+│   └── test_web/             # Web 集成测试
+└── run.py                     # 测试入口
 ```
 
----
+## Testing
 
-## 项目结构
+```bash
+# 运行所有测试
+pytest tests/
 
-```
-├── ai_core/                    # 核心调度引擎
-│   ├── agents.py               # AgentDispatcher + SecurityAuditor + TaskExecutor
-│   ├── arena.py                # 红蓝对抗竞技场
-│   ├── attacker.py             # 红队 Agent
-│   ├── defect_manager.py        # 缺陷管家
-│   └── router.py                # 智能路由 + 熔断器
-├── api/                        # 接口协议层
-│   ├── auth_api.py
-│   ├── base_api.py
-│   └── user_api.py
-├── common/                     # 底层组件
-│   ├── trace_context.py        # TraceID 链路追踪
-│   ├── redis_util.py
-│   ├── mysql_util.py
-│   └── crypto_util.py
-├── config/                     # 配置与日志
-│   ├── env_config.py
-│   └── log_config.py
-├── tests/                      # 测试套件
-│   ├── test_agents/            # Agent 核心测试
-│   └── test_web/               # Web 集成测试
-└── run.py                      # 测试运行入口
+# 运行 Agent 核心测试
+pytest tests/test_agents/ -v
+
+# 运行标记测试
+pytest -m "not real_ai"        # 常规回归
+pytest -m "real_ai"            # 高烈度演练
 ```
 
----
+## Configuration
 
-## 核心组件详解
+| 环境变量 | 默认值 | 说明 |
+|---------|--------|------|
+| `USE_MOCK_AUDIT` | True | Mock 审计模式（CI 用） |
+| `USE_MOCK_AI` | True | Mock AI 模式（CI 用） |
+| `USE_REAL_ATTACKER_AI` | False | 红队使用真实 AI |
+| `ZHIPU_API_KEY` | - | 智谱 AI API Key |
 
-### 1. AgentDispatcher (调度中枢)
-
-处理请求全流程：TraceID 注入 → Tier 0-1 检查 → 意图解析 → Tier 2 审计 → 工具执行 → Tier 3 审计
-
-### 2. SecurityAuditor (安全审计器)
-
-- **Mock 模式**：`USE_MOCK_AUDIT=True`，零成本，适合 CI
-- **生产模式**：`USE_MOCK_AUDIT=False`，调用 GLM-4 进行语义审计
-
-### 3. TaskExecutor (任务执行器)
-
-- **Mock 模式**：`USE_MOCK_AI=True`，使用预定义规则
-- **生产模式**：`USE_MOCK_AI=False`，调用 GLM-4 解析意图
-
-### 4. ModelRouter (智能路由)
-
-根据 prompt 长度自动分级：
-- < 10 字符：LOCAL_MOCK（免费）
-- < 50 字符：COMMON（平衡）
-- >= 50 字符：GLM-4（高性能）
-
-### 5. Arena (对抗竞技场)
-
-协调红蓝对抗，记录对抗过程和结果。
-
-### 6. AttackerAgent (红队 Agent)
-
-5 种绕过策略：Base64 编码、字符拆分、环境变量拼接、大小写混淆、空格绕过。支持真实 AI 生成攻击载荷。
-
-### 7. DefectManager (缺陷管家)
-
-攻击成功时自动记录缺陷到 `logs/security_defects.jsonl`，支持提单至禅道。
-
----
-
-## 技术栈
-
-- **Python 3.14+** + **Asyncio** 异步高并发
-- **智谱 AI GLM-4** 大语言模型
-- **Pytest** + **pytest-asyncio** 测试框架
-- **Allure** 测试报告
-- **MySQL** + **Redis** 数据存储
-
----
-
-## 许可证
+## License
 
 MIT License
