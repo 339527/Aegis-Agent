@@ -1,82 +1,56 @@
 # Aegis-Agent V2.5
 
-企业级大模型异步安全网关 | 2026 企业级 AI 原生应用底层安全基建
+企业级大模型异步安全网关 | AI Native Application Security Infrastructure
 
 ## 核心定位
 
-**解决两大核心痛点：**
-1. **高延迟并发阻塞** - 通过 Asyncio 异步调度确保海量请求下的系统吞吐与稳定性
-2. **AI 越权调用风险** - 建立"物理+语义"双重防御阵列，防止 Agent 工具调用演变为 RCE 漏洞
+**解决 LLM 落地生产环境的双重挑战：**
+
+1. **高延迟并发阻塞** → Asyncio 异步调度，海量请求下依然吞吐稳定
+2. **AI 越权调用风险** → "物理+语义"双重防御，Agent 工具调用不再演变 RCE
 
 ---
 
 ## 核心架构
 
-### 全链路 Asyncio 高并发调度底座
+### 全链路 Asyncio 异步调度
 
-- 基于 Python 3.14 异步事件循环架构，彻底解耦 I/O 等待
-- 测试显示异步处理比同步处理快约 **10 倍**
-- 并发压测测试耗时约为 **0.15 秒**（使用 mock 消除网络 I/O 耗时）
+```
+用户请求 → AgentDispatcher → SecurityAuditor(Tier 0-3)
+                              ↓
+                          TaskExecutor
+                              ↓
+                         ModelRouter
+```
 
-### Fail-Fast 双轨防御护栏 (Dual-Track WAF)
+- **零阻塞**：基于 Python asyncio 单线程事件循环，I/O 等待彻底解耦
+- **零妥协**：异步处理比同步快 10 倍（实测 0.15 秒 vs 1.5 秒）
 
-| 层级 | 名称 | 功能 |
+### 四层 Fail-Fast 防御护栏
+
+| 层级 | 组件 | 职责 |
 |------|------|------|
-| **Tier 0** | 前置护栏 | 快速检查敏感关键词（如 `ZHIPU_API_KEY`、`SECRET_FLAG`） |
-| **Tier 1** | 物理断路器 | 正则拦截 `DROP`、`OR '1'='1'` 等显性注入攻击，节省 80%+ Token 成本 |
-| **Tier 2** | 语义防火墙 | 大模型 `Function Calling` 执行前进行深度意图审计，拦截隐蔽的 Prompt Injection |
-| **Tier 3** | 出口审计 | 终极防线，防止敏感数据泄露 |
-
-### 动态对抗演习系统
-
-- **红队 Agent**：具备自我进化能力的 AI 渗透专家，支持编码绕过、字符拆分、逻辑绕过等高级攻击策略
-- **蓝队防御**：多层次防御体系，实时拦截各类攻击
-- **反馈闭环**：红队根据拦截反馈自动优化攻击策略，持续提升系统安全性
+| **Tier 0** | `SecurityAuditor.check_sensitive_keywords` | 关键词光速拦截（ZHIPU_API_KEY/SECRET_FLAG） |
+| **Tier 1** | `SecurityAuditor.check_malicious_patterns` | 正则断路器（SQL注入/命令注入） |
+| **Tier 2** | `SecurityAuditor.audit_payload` | 大模型语义审计（Prompt Injection） |
+| **Tier 3** | `@agent_tool` 白名单装饰器 | 出口审计 + 权限校验 |
 
 ### 智能路由与成本控制
 
-- **任务分级路由**：根据任务复杂度动态分配模型资源（LOCAL_MOCK 或 GLM-4）
-- **Token 预算管理**：每日 Token 消耗监控与熔断机制，默认限额 1000 Tokens
-- **降级策略**：低复杂度任务自动路由至免费本地引擎，降低成本
+- **LOCAL_MOCK**：简单任务，零成本
+- **COMMON**：中等复杂度，平衡成本
+- **GLM-4**：复杂逻辑，高性能
+- **Token 熔断器**：1000 Tokens 预算自动熔断
 
----
+### 动态红蓝对抗
 
-## 项目结构
-
-```
-├── ai_core/                # AI 网关核心调度引擎
-│   ├── agents.py           # 调度中枢、安全审计、任务执行
-│   ├── arena.py            # 动态对抗战场
-│   ├── attacker.py         # 红队 Agent
-│   ├── defect_manager.py   # 缺陷管理
-│   └── router.py           # 智能路由与熔断器
-├── api/                    # 接口协议层封装
-│   ├── auth_api.py         # 认证相关接口
-│   ├── base_api.py         # 基础 API 封装
-│   └── user_api.py         # 用户相关接口
-├── common/                 # 底层组件库
-│   ├── crypto_util.py      # 加密工具
-│   ├── file_util.py        # 文件工具
-│   ├── mysql_util.py       # MySQL 工具
-│   ├── redis_util.py       # Redis 工具
-│   └── trace_context.py    # 链路追踪上下文
-├── config/                 # 环境配置与日志策略
-│   ├── env_config.py       # 环境配置
-│   └── log_config.py       # 日志配置
-├── tests/                  # 自动化测试集
-│   ├── test_agents/        # Agent 核心功能测试
-│   └── test_web/           # Web 业务链路测试
-└── run.py                  # 主运行入口
-```
+- **AttackerAgent**：5 种绕过策略（编码/字符拆分/大小写/空格），支持真实 AI 生成
+- **Arena**：5 轮对抗循环，红队根据拦截反馈自动变异
+- **DefectManager**：攻击成功时自动提单至禅道
 
 ---
 
 ## 快速开始
-
-### 环境要求
-
-- Python 3.14+
-- 智谱 AI API Key（需配置环境变量）
 
 ### 安装依赖
 
@@ -86,19 +60,18 @@ pip install -r requirements.txt
 
 ### 配置环境变量
 
-创建 `.env` 文件：
-
 ```bash
+# .env 文件
 ZHIPU_API_KEY=your_api_key_here
 ```
 
 ### 运行测试
 
 ```bash
-# 方式一：交互式菜单
+# 交互式菜单
 python run.py
 
-# 方式二：命令行模式
+# 或命令行模式
 python -m pytest tests/test_agents/ -v
 ```
 
@@ -106,121 +79,115 @@ python -m pytest tests/test_agents/ -v
 
 ## 分级自动化测试策略
 
-### 测试用例分级
+### 测试分级
 
-| 测试类型 | 标记 | 策略 | 成本 | 适用场景 |
-|---------|------|------|------|----------|
-| **常规回归测试** | - | Mock 模式 | 零消耗 | CI 流水线，每次代码 Push 自动运行 |
-| **高烈度演练测试** | `@pytest.mark.real_ai` | 真实 AI | 消耗 Token | 每周定期运行，安全攻防演练 |
+| 模式 | 命令 | 成本 | 场景 |
+|------|------|------|------|
+| **常规回归** | `python run.py` → 选 1 | 零 Token | CI 流水线，代码 Push 自动触发 |
+| **高烈度演练** | `python run.py` → 选 2 | 消耗 API | 每周安全演练，红蓝对抗 |
+| **全量测试** | `python run.py` → 选 3 | 混合模式 | 发布前验证 |
 
-### 运行命令
+### 测试标记
 
-```bash
-# 常规回归测试（CI 流水线）
-python run.py
-# 选择 1
+```python
+# 常规测试：默认 Mock 模式
+@pytest.mark.asyncio
+async def test_xxx():
+    pass
 
-# 高烈度演练测试（安全演练）
-python run.py
-# 选择 2
-
-# 全量测试（发布前验证）
-python run.py
-# 选择 3
+# 高烈度演练：使用真实 AI
+@pytest.mark.asyncio
+@pytest.mark.real_ai
+async def test_real_duel():
+    pass
 ```
 
-### 核心测试用例
+### 测试结果
 
-- **并发压测**：验证 Asyncio Dispatcher 的高吞吐调度能力
-- **安全护栏**：验证三级防护机制的有效性
-- **成本控制**：验证 Token 熔断机制
-- **动态对抗**：验证红队攻击与蓝队防御的闭环
-- **集成测试**：验证与若依系统的无缝集成
+```
+常规回归测试：21 passed, 1 skipped, 1 deselected (~5s)
+高烈度演练测试：1 passed (~32s，真实 AI)
+全量测试：22 passed, 1 skipped (~5s)
+```
+
+---
+
+## 项目结构
+
+```
+├── ai_core/                    # 核心调度引擎
+│   ├── agents.py               # AgentDispatcher + SecurityAuditor + TaskExecutor
+│   ├── arena.py                # 红蓝对抗竞技场
+│   ├── attacker.py             # 红队 Agent
+│   ├── defect_manager.py        # 缺陷管家
+│   └── router.py                # 智能路由 + 熔断器
+├── api/                        # 接口协议层
+│   ├── auth_api.py
+│   ├── base_api.py
+│   └── user_api.py
+├── common/                     # 底层组件
+│   ├── trace_context.py        # TraceID 链路追踪
+│   ├── redis_util.py
+│   ├── mysql_util.py
+│   └── crypto_util.py
+├── config/                     # 配置与日志
+│   ├── env_config.py
+│   └── log_config.py
+├── tests/                      # 测试套件
+│   ├── test_agents/            # Agent 核心测试
+│   └── test_web/               # Web 集成测试
+└── run.py                      # 测试运行入口
+```
+
+---
+
+## 核心组件详解
+
+### 1. AgentDispatcher (调度中枢)
+
+处理请求全流程：TraceID 注入 → Tier 0-1 检查 → 意图解析 → Tier 2 审计 → 工具执行 → Tier 3 审计
+
+### 2. SecurityAuditor (安全审计器)
+
+- **Mock 模式**：`USE_MOCK_AUDIT=True`，零成本，适合 CI
+- **生产模式**：`USE_MOCK_AUDIT=False`，调用 GLM-4 进行语义审计
+
+### 3. TaskExecutor (任务执行器)
+
+- **Mock 模式**：`USE_MOCK_AI=True`，使用预定义规则
+- **生产模式**：`USE_MOCK_AI=False`，调用 GLM-4 解析意图
+
+### 4. ModelRouter (智能路由)
+
+根据 prompt 长度自动分级：
+- < 10 字符：LOCAL_MOCK（免费）
+- < 50 字符：COMMON（平衡）
+- >= 50 字符：GLM-4（高性能）
+
+### 5. Arena (对抗竞技场)
+
+协调红蓝对抗，记录对抗过程和结果。
+
+### 6. AttackerAgent (红队 Agent)
+
+5 种绕过策略：Base64 编码、字符拆分、环境变量拼接、大小写混淆、空格绕过。支持真实 AI 生成攻击载荷。
+
+### 7. DefectManager (缺陷管家)
+
+攻击成功时自动记录缺陷到 `logs/security_defects.jsonl`，支持提单至禅道。
 
 ---
 
 ## 技术栈
 
-- **编程语言**：Python 3.14+
-- **并发框架**：Asyncio（处理多任务同时执行）
-- **AI 模型**：智谱 AI GLM-4
-- **测试框架**：Pytest + Allure
-- **数据库**：MySQL、Redis
-- **工具库**：requests、httpx、PyYAML、PyMySQL、python-dotenv
-
----
-
-## 功能特性
-
-### 1. 四层防御机制
-
-1. **关键词检查**：快速拦截明显的攻击
-2. **正则拦截**：验证工具调用的安全性
-3. **AI 意图分析**：识别隐藏的攻击
-4. **结果检查**：防止敏感数据泄露
-
-### 2. 动态对抗演习
-
-- 自动生成各种攻击代码测试系统
-- 根据防御结果调整攻击策略
-- 持续优化系统的防御能力
-
-### 3. 缺陷管理
-
-- 检测到数据泄露时自动记录漏洞
-- 生成详细的漏洞报告
-- 支持自动创建漏洞工单
-
-### 4. 链路追踪
-
-- 为每一次请求注入唯一的 `REQ-UUID`
-- 集成滚动日志体系，支持攻击链路还原与故障定位
-
----
-
-## 测试结果
-
-### 常规回归测试
-
-```
-21 passed, 1 skipped, 1 deselected
-执行时间：约 5 秒
-```
-
-### 高烈度演练测试
-
-```
-1 passed
-执行时间：约 30-35 秒（使用真实 AI）
-```
-
-### 全量测试
-
-```
-22 passed, 1 skipped
-执行时间：约 5-10 秒
-```
-
----
-
-## 项目亮点
-
-1. **企业级架构**：分层设计，模块化架构，易于扩展和维护
-2. **全面安全防护**：多层次防御机制，有效防止各类攻击
-3. **高性能**：基于 Asyncio 的异步架构，提供高并发处理能力
-4. **可观测性**：完善的日志系统和链路追踪，便于问题排查和性能优化
-5. **自动化测试**：全面的测试覆盖，确保系统的稳定性和安全性
-6. **动态对抗**：红队蓝队对抗，持续提升系统的防御能力
-7. **成本控制**：智能路由和 Token 预算管理，有效控制 AI 服务成本
+- **Python 3.14+** + **Asyncio** 异步高并发
+- **智谱 AI GLM-4** 大语言模型
+- **Pytest** + **pytest-asyncio** 测试框架
+- **Allure** 测试报告
+- **MySQL** + **Redis** 数据存储
 
 ---
 
 ## 许可证
 
-本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
-
----
-
-## 联系方式
-
-- 项目仓库：https://gitee.com/mrlijinghao/ruo-yi-ai-guard-tester
+MIT License
