@@ -1,148 +1,146 @@
-# Aegis-Agent Technical Notes
+# Aegis-Agent 技术说明
 
-Aegis-Agent is a Python codebase for securing and validating **LLM / Agent tool-calling workflows**. The project focuses on three concerns: execution safety, async orchestration, and repeatable verification.
+Aegis-Agent 是一个面向 **LLM / Agent 工具调用场景** 的 Python 项目，主要覆盖执行安全、异步调度和可重复验证三类问题。
 
 ---
 
-## Architecture
+## 架构概览
 
-The system is organized around a single request pipeline that evaluates user input before, during, and after tool execution.
+系统围绕一条统一的请求处理链路展开，在工具执行前、中、后分别进行约束与校验。
 
 ```text
-User Input
+用户输入
   ↓
-Tier 0 Rule Checks
+Tier 0 规则检查
   ↓
-Routing and Budget Check
+路由与预算检查
   ↓
-Intent Parsing
+意图解析
   ↓
-Tool-Call Audit
+工具调用审计
   ↓
-Tool Execution
+工具执行
   ↓
-Response Leakage Check
+结果泄露检查
   ↓
-Return Result / Record Defect
+返回结果 / 记录缺陷
 ```
 
-This design allows the gateway to:
-- block obvious high-risk input early
-- constrain model-driven tool behavior before execution
-- detect sensitive output before it leaves the system
+这条链路对应三类系统目标：
+- 尽早拦截明显高风险输入
+- 在执行前约束模型驱动的工具行为
+- 在输出阶段阻断敏感信息泄露
 
 ---
 
-## Components
+## 核心组件
 
 ### `AgentDispatcher`
-File: `ai_core/agents.py`
+文件：`ai_core/agents.py`
 
-The dispatcher is the main execution path. It coordinates rule checks, routing, intent parsing, audit, execution, response validation, and error handling.
+调度器是项目的主执行路径，负责串联规则检查、路由、意图解析、安全审计、工具执行、结果校验和异常处理。
 
 ### `SecurityAuditor`
-File: `ai_core/agents.py`
+文件：`ai_core/agents.py`
 
-The auditor evaluates tool calls before execution.
+审计器负责在工具执行前再次评估安全性。
 
-Current modes:
-- **Mock mode** for fast regression tests
-- **Real AI audit mode** for semantic risk evaluation
+当前支持两种模式：
+- **Mock 模式**：用于快速回归测试
+- **真实 AI 审计模式**：用于语义风险判断
 
 ### `TaskExecutor`
-File: `ai_core/agents.py`
+文件：`ai_core/agents.py`
 
-The executor is responsible for intent parsing and approved tool execution. Tool functions must be explicitly allowlisted through the project’s decorator-based registration model.
+执行器负责意图解析和授权工具执行。工具函数通过装饰器进行白名单注册，未注册函数不能直接进入执行链路。
 
 ### `ModelRouter`
-File: `ai_core/router.py`
+文件：`ai_core/router.py`
 
-The router provides lightweight complexity-based routing and budget protection. It records token usage and can trip a circuit breaker when limits are exceeded.
+路由器提供轻量级复杂度分流和预算保护能力，负责记录 Token 使用量，并在超限时触发熔断。
 
 ### `Arena`
-File: `ai_core/arena.py`
+文件：`ai_core/arena.py`
 
-The arena drives the attacker / defender loop. It coordinates payload generation, defensive evaluation, and round-by-round result judgment.
+竞技场模块负责攻击方与防御方的对抗循环，协调攻击载荷生成、防御评估和轮次结果判定。
 
 ### `DefectManager`
-File: `ai_core/defect_manager.py`
+文件：`ai_core/defect_manager.py`
 
-The defect manager records high-risk events and successful defense failures as local defect output. Current output path: `logs/security_defects.jsonl`.
+缺陷管理器负责记录高风险事件与防线击穿结果。当前输出位置为本地 `logs/security_defects.jsonl`。
 
 ---
 
-## Security Model
+## 安全模型
 
-### Input Filtering
-The dispatcher performs fast rule-based checks at the entrypoint. These checks cover common high-risk patterns such as:
-- command injection
-- SQL injection
+### 输入过滤
+调度器在入口处进行快速规则拦截，覆盖以下高风险模式：
+- 命令注入
+- SQL 注入
 - XSS
-- sensitive prompt probing
+- 敏感信息探测
 
-### Tool-Call Audit
-Passing the rule layer does not imply safe execution. Tool calls are audited again before execution to catch semantically unsafe actions.
+### 工具调用审计
+通过规则层并不意味着可以直接执行。工具调用在执行前仍需进入审计层，用于识别语义上的危险操作。
 
-### Response Validation
-Tool output is inspected before it is returned. If the response contains sensitive keywords, the dispatcher blocks it at the output stage.
+### 输出结果校验
+工具返回结果在输出前会再次检查。如果结果中包含敏感关键词，系统会在返回前阻断。
 
-### Defect Recording
-Security failures and breakthrough cases are persisted as local defect records for later analysis and regression coverage.
-
----
-
-## Async Execution
-
-The execution path is built on `asyncio`.
-
-This enables the project to:
-- process concurrent requests without serial blocking
-- support async tools and external-call style workflows
-- apply timeout boundaries around AI inference and execution steps
-
-`tests/test_agents/test_async.py` validates this behavior with concurrent async tasks and checks total execution time against expected concurrency characteristics.
+### 缺陷记录
+安全失败或防线击穿场景会被持久化为本地缺陷记录，用于后续分析与回归验证。
 
 ---
 
-## Testing Strategy
+## 异步执行
+
+执行链路基于 `asyncio` 构建，主要用于：
+- 在并发请求下避免串行阻塞
+- 支持异步工具与外部调用类工作流
+- 为 AI 推理与执行步骤提供超时边界
+
+`tests/test_agents/test_async.py` 使用并发异步任务验证总耗时是否符合预期，从而确认调度链路具备并发执行特征。
+
+---
+
+## 测试策略
 
 ### `tests/test_agents/`
-This directory covers the core gateway behavior:
-- rule interception
-- routing behavior
-- async execution
-- adversarial simulation
-- defect recording
+覆盖网关核心行为：
+- 规则拦截
+- 路由行为
+- 异步执行
+- 对抗演练
+- 缺陷记录
 
 ### `tests/test_web/`
-This directory covers business integration flows:
-- RuoYi login
-- user lifecycle operations
-- Redis / MySQL backed assertions
-- environment-dependent business checks
+覆盖业务系统集成路径：
+- 若依登录
+- 用户生命周期操作
+- Redis / MySQL 相关断言
+- 本地环境依赖的业务校验
 
-### Markers
-Defined in `pytest.ini`:
+### 测试标记
+在 `pytest.ini` 中定义：
 - `smoke`
 - `p0`
 - `p1`
 - `db`
 - `real_ai`
 
-### Recommended Commands
-Core tests:
+### 推荐命令
+核心测试：
 
 ```bash
 pytest tests/test_agents/ -v -m "not real_ai"
 ```
 
-Full suite:
+全量测试：
 
 ```bash
 pytest
 ```
 
-Real-model adversarial tests:
+真实模型演练：
 
 ```bash
 pytest -m "real_ai"
@@ -150,21 +148,21 @@ pytest -m "real_ai"
 
 ---
 
-## Runtime and Reporting
+## 运行与报告
 
-Interactive runner:
+交互式入口：
 
 ```bash
 python run.py
 ```
 
-Allure report generation:
+Allure 报告生成：
 
 ```bash
 allure generate ./reports/allure_raw -o ./reports/allure_report --clean
 ```
 
-Locally generated outputs include:
+本地运行会生成以下内容：
 - `reports/`
 - `tests/test_web/reports/`
 - `logs/`
@@ -175,26 +173,26 @@ Locally generated outputs include:
 
 ---
 
-## Repository Structure
+## 仓库结构
 
 ```text
 .
-├── ai_core/                 # gateway core: orchestration, routing, adversarial loop, defect output
-├── api/                     # business API wrappers
-├── common/                  # shared utilities: trace, redis, mysql, file helpers
-├── config/                  # environment and logging configuration
-├── data/                    # test data
-├── tests/                   # automated tests
-├── .github/workflows/       # GitHub Actions workflows
-├── .workflow/               # additional CI configuration
-├── run.py                   # test runner entrypoint
-├── pytest.ini               # pytest configuration
-└── requirements.txt         # dependencies
+├── ai_core/                 # 网关核心：调度、路由、对抗循环、缺陷输出
+├── api/                     # 业务 API 封装
+├── common/                  # 公共组件：Trace、Redis、MySQL、文件工具等
+├── config/                  # 环境与日志配置
+├── data/                    # 测试数据
+├── tests/                   # 自动化测试
+├── .github/workflows/       # GitHub Actions 工作流
+├── .workflow/               # 其他 CI 配置
+├── run.py                   # 测试运行入口
+├── pytest.ini               # Pytest 配置
+└── requirements.txt         # 依赖清单
 ```
 
 ---
 
-## CI
+## 持续集成
 
-- `/.github/workflows/ci.yml` — GitHub Actions workflow
-- `/.workflow/agent-ci.yml` — additional platform-specific CI configuration
+- `/.github/workflows/ci.yml`：GitHub Actions 工作流
+- `/.workflow/agent-ci.yml`：其他平台下的 CI 配置

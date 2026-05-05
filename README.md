@@ -1,74 +1,74 @@
 # Aegis-Agent
 
-Aegis-Agent is a Python project for securing and validating **LLM / Agent tool-calling workflows**. It combines request gating, tool-call auditing, async orchestration, adversarial simulation, and automated testing in a single codebase.
+Aegis-Agent 是一个面向 **LLM / Agent 工具调用场景** 的 Python 项目，主要解决工具调用链路中的 **安全控制、异步调度和自动化验证** 问题。项目将请求拦截、工具审计、攻防演练、缺陷记录和测试回归整合在同一套代码体系中。
 
 ---
 
-## Highlights
+## 核心特性
 
-- **Multi-layer safety controls** for command injection, SQL injection, XSS, sensitive prompt probing, and response leakage
-- **Async execution pipeline** built on `asyncio`, with concurrency verification and timeout protection
-- **Tool-call governance** through pre-execution auditing and explicit tool allowlisting
-- **Adversarial simulation** for validating defenses through attacker / defender interaction
-- **Automated verification** with `Pytest + Allure`
-- **CI integration** through GitHub Actions
+- **多层安全防护**：覆盖命令注入、SQL 注入、XSS、敏感信息探测和结果泄露检查
+- **异步执行链路**：基于 `asyncio` 组织处理流程，支持并发验证和超时保护
+- **工具调用控制**：在执行前增加语义审计和白名单约束
+- **攻防演练机制**：通过攻击方与防御方交互验证防御策略效果
+- **自动化验证体系**：使用 `Pytest + Allure` 组织测试并输出报告
+- **持续集成**：接入 GitHub Actions 执行核心测试流程
 
 ---
 
-## System Flow
+## 系统流程
 
 ```text
-User Input
+用户输入
   ↓
-Tier 0 Rule Checks
+Tier 0 规则检查
   ↓
-Routing and Budget Check
+路由与预算检查
   ↓
-Intent Parsing
+意图解析
   ↓
-Tool-Call Audit
+工具调用审计
   ↓
-Tool Execution
+工具执行
   ↓
-Response Leakage Check
+结果泄露检查
   ↓
-Return Result / Record Defect
+返回结果 / 记录缺陷
 ```
 
 ---
 
-## Core Components
+## 核心模块
 
 ### `ai_core/agents.py`
-Main execution pipeline. Handles rule checks, routing, intent parsing, audit, execution, and response validation.
+主执行链路，负责规则检查、路由、意图解析、安全审计、工具执行和结果校验。
 
 ### `ai_core/router.py`
-Task routing and resource protection. Tracks token usage and triggers circuit-breaking when budget is exceeded.
+负责任务路由与资源保护，记录 Token 使用量，并在预算超限时触发熔断。
 
 ### `ai_core/arena.py`
-Adversarial simulation loop. Coordinates payload generation, defense evaluation, and result judgment.
+负责攻防对抗循环，协调攻击载荷生成、防御评估和结果判定。
 
 ### `ai_core/defect_manager.py`
-Persists security failures and breakthrough cases as local defect records.
+负责将高风险事件和防线击穿场景记录为本地缺陷输出。
 
 ---
 
-## Test Coverage
+## 测试覆盖
 
 ### `tests/test_agents/`
-Covers the core gateway logic:
-- security interception
-- async concurrency behavior
-- adversarial simulation
-- defect recording
+覆盖网关核心能力：
+- 安全拦截
+- 异步并发行为
+- 对抗演练
+- 缺陷记录
 
 ### `tests/test_web/`
-Covers business-system integration paths:
-- RuoYi login flow
-- user creation and lifecycle
-- environment-dependent Redis / MySQL backed checks
+覆盖业务系统集成链路：
+- 若依登录流程
+- 用户创建与生命周期
+- 依赖 Redis / MySQL 的环境型校验
 
-### Markers
+### 测试标记
 
 - `smoke`
 - `p0`
@@ -76,7 +76,7 @@ Covers business-system integration paths:
 - `db`
 - `real_ai`
 
-Representative test files:
+代表性测试文件：
 - `tests/test_agents/test_async.py`
 - `tests/test_agents/test_arena.py`
 - `tests/test_agents/test_gateway_logic.py`
@@ -84,43 +84,43 @@ Representative test files:
 
 ---
 
-## Quick Start
+## 快速开始
 
-### Install dependencies
+### 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Configure environment
+### 配置环境变量
 
-Create a local `.env` file in the project root:
+在项目根目录创建本地 `.env` 文件：
 
 ```bash
 ZHIPU_API_KEY=your_api_key_here
 ```
 
-Web integration tests also require local RuoYi, Redis, and MySQL dependencies.
+如果需要运行业务集成测试，还需准备若依系统、Redis、MySQL 等本地依赖环境。
 
-### Run core tests
+### 运行核心测试
 
 ```bash
 pytest tests/test_agents/ -v -m "not real_ai"
 ```
 
-### Run full test suite
+### 运行全部测试
 
 ```bash
 pytest
 ```
 
-### Run via interactive entrypoint
+### 使用交互式入口运行
 
 ```bash
 python run.py
 ```
 
-### Generate Allure report
+### 生成 Allure 报告
 
 ```bash
 allure generate ./reports/allure_raw -o ./reports/allure_report --clean
@@ -128,29 +128,29 @@ allure generate ./reports/allure_raw -o ./reports/allure_report --clean
 
 ---
 
-## Repository Layout
+## 仓库结构
 
 ```text
 .
-├── ai_core/                 # gateway core: orchestration, routing, adversarial loop, defect output
-├── api/                     # business API wrappers
-├── common/                  # shared utilities: trace, redis, mysql, file helpers
-├── config/                  # environment and logging configuration
-├── data/                    # test data
-├── tests/                   # automated tests
-├── .github/workflows/       # GitHub Actions workflows
-├── .workflow/               # additional CI configuration
-├── run.py                   # test runner entrypoint
-├── pytest.ini               # pytest configuration
-├── requirements.txt         # dependencies
+├── ai_core/                 # 网关核心：调度、路由、对抗循环、缺陷输出
+├── api/                     # 业务 API 封装
+├── common/                  # 公共组件：Trace、Redis、MySQL、文件工具等
+├── config/                  # 环境与日志配置
+├── data/                    # 测试数据
+├── tests/                   # 自动化测试
+├── .github/workflows/       # GitHub Actions 工作流
+├── .workflow/               # 其他 CI 配置
+├── run.py                   # 测试运行入口
+├── pytest.ini               # Pytest 配置
+├── requirements.txt         # 依赖清单
 └── Aegis-Agent_V2.5_技术文档.md
 ```
 
 ---
 
-## Runtime Outputs
+## 本地生成内容
 
-The following are generated locally during execution or testing and are not treated as source artifacts:
+以下内容会在本地运行或测试过程中生成，不作为仓库源文件维护：
 
 - `.env`
 - `reports/`
@@ -162,13 +162,13 @@ The following are generated locally during execution or testing and are not trea
 
 ---
 
-## CI
+## 持续集成
 
-- `/.github/workflows/ci.yml` — GitHub Actions workflow
-- `/.workflow/agent-ci.yml` — additional platform-specific CI configuration
+- `/.github/workflows/ci.yml`：GitHub Actions 工作流
+- `/.workflow/agent-ci.yml`：其他平台下的 CI 配置
 
 ---
 
-## Additional Notes
+## 补充说明
 
-Detailed implementation notes are available in `Aegis-Agent_V2.5_技术文档.md`.
+更多实现细节见：`Aegis-Agent_V2.5_技术文档.md`
